@@ -1,0 +1,35 @@
+{
+	"s638_DPX": {
+		"Notes": "Dropped due to their BY accuracy being low (.875) even though it's generally considered the easiest condition."
+	},
+	"s586_DPX": {
+		"Notes": "Dropped due to their overall accuracy being low, with their AX accuracy being far below chance (AX: .27, AY: .71, BX: .58, BY: .71)."
+	},
+	"s586_motorSelectiveStop": {
+		"Notes": "Dropped due to their critical stop failure acc being below chance (.42)."
+	},
+	"s650_ANT": {
+		"Notes": "Dropped due to accuracy being low across all conditions (spatial congruent: .66, double congruent: .69, spatial incongruent: .36, double incongruent: .53)."
+	},
+	"s650_DPX": {
+		"Notes": "Dropped due to accuracy being low across all conditions (AX: .75, AY: .46, BX: .75, BY: .54)."
+	},
+	"s650_stroop": {
+		"Notes": "Dropped due to a having low accuracy within the incongruent condition (.60)."
+	},
+	"s623_DPX": {
+		"Notes": "Dropped due to having poor accuracy across all conditions (AX: .57, AY: .29, BX: .63, BY: .63)."
+	},
+	"s623_twoByTwo": {
+		"Notes": "Dropped due to having poor accuracy across all conditions (Cue Stay: .68, Task Switch: .61, Cue Switch: .44)."
+	},
+	"s623_surveyMedley": {
+		"Notes": "Dropped due to subject only responding at the extremes of the survey scale and having a high omission rate (.3)."
+	},
+	"s608_stroop": {
+		"Notes": "Dropped due to having at or below chance accuracy in all conditions (incongruent: .46, congruent: .5)"
+	},
+	"s172_WATT": {
+		"Notes": "Dropped due to a techincal issue with experiment factory showing a negative initial onset time, causing the entire tasks data's onset timings to be unusable."
+	}
+}

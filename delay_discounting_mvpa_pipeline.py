@@ -55,39 +55,7 @@ from joblib import Parallel, delayed
 import multiprocessing as mp
 
 # Configuration
-class Config:
-    """Configuration parameters for the analysis"""
-    
-    # Data paths
-    DATA_ROOT = "/oak/stanford/groups/russpold/data/uh2/aim1"
-    FMRIPREP_DIR = f"{DATA_ROOT}/derivatives/fmriprep"
-    BEHAVIOR_DIR = f"{DATA_ROOT}/behavioral_data/event_files"
-    
-    # Output directories
-    OUTPUT_DIR = "./delay_discounting_results"
-    BEHAVIOR_OUTPUT = f"{OUTPUT_DIR}/behavioral_analysis"
-    MVPA_OUTPUT = f"{OUTPUT_DIR}/mvpa_analysis"
-    GEOMETRY_OUTPUT = f"{OUTPUT_DIR}/geometry_analysis"
-    
-    # Analysis parameters
-    TR = 1.0  # Repetition time in seconds
-    HEMI_LAG = 4  # Hemodynamic lag in TRs
-    
-    # ROI masks (MNI space)
-    ROI_MASKS = {
-        'striatum': './masks/striatum_mask.nii.gz',
-        'dlpfc': './masks/dlpfc_mask.nii.gz',
-        'vmpfc': './masks/vmpfc_mask.nii.gz'
-    }
-    
-    # MVPA parameters
-    N_JOBS = -1  # Use all available cores
-    CV_FOLDS = 5
-    N_PERMUTATIONS = 1000
-    
-    # Quality control
-    MIN_ACCURACY = 0.6  # Minimum behavioral accuracy
-    MAX_RT = 10.0  # Maximum reaction time in seconds
+from oak_storage_config import OAKConfig as Config
 
 class BehavioralAnalysis:
     """Class for behavioral analysis and discounting parameter estimation"""

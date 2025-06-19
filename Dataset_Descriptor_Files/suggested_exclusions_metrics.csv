@@ -1,0 +1,35 @@
+,aim1 beh data
+completed datasets,68.0
+fully dropped datasets,19.0
+partial datasets,23.0
+total,110.0
+ANT dropped,23.0
+ANT kept,87.0
+ANT percentage kept,0.7909090909090909
+discountFix dropped,22.0
+discountFix kept,88.0
+discountFix percentage kept,0.8
+DPX dropped,23.0
+DPX kept,87.0
+DPX percentage kept,0.7909090909090909
+motorSelectiveStop dropped,29.0
+motorSelectiveStop kept,81.0
+motorSelectiveStop percentage kept,0.7363636363636363
+stopSignal dropped,22.0
+stopSignal kept,88.0
+stopSignal percentage kept,0.8
+twoByTwo dropped,22.0
+twoByTwo kept,88.0
+twoByTwo percentage kept,0.8
+stroop dropped,20.0
+stroop kept,90.0
+stroop percentage kept,0.8181818181818182
+WATT dropped,21.0
+WATT kept,89.0
+WATT percentage kept,0.8090909090909091
+CCTHot dropped,20.0
+CCTHot kept,90.0
+CCTHot percentage kept,0.8181818181818182
+surveyMedley dropped,19.0
+surveyMedley kept,91.0
+surveyMedley percentage kept,0.8272727272727273
