@@ -60,9 +60,17 @@ The pipeline fits hyperbolic discounting models to choice data:
 
 ### 3. Neural Geometry Analysis
 
-- **Dimensionality Reduction**: PCA, MDS, t-SNE, Isomap
-- **Behavioral Correlations**: Map trial-wise behavior to neural geometry
-- **Representational Analysis**: Compute representational dissimilarity matrices
+#### **Standard Analyses**
+- **Dimensionality Reduction**: PCA, MDS, t-SNE
+- **Representational Similarity Analysis (RSA)**: Neural pattern similarity matrices
+- **Distance Analysis**: Within vs between condition separability with permutation testing
+
+#### **Advanced Geometric Analyses**
+- **Manifold Alignment**: Procrustes analysis and Canonical Correlation Analysis (CCA)
+- **Geodesic Distance Analysis**: Non-linear manifold distances using Isomap
+- **Manifold Curvature**: Local geometric complexity estimation
+- **Information Geometry**: KL divergence, Jensen-Shannon divergence, Wasserstein distance
+- **Specialized Delay Discounting Comparisons**: Choice types, delay lengths, subjective values
 
 ## Files
 
@@ -73,10 +81,21 @@ The pipeline fits hyperbolic discounting models to choice data:
 - `analyze_results.py` - Results visualization and statistics
 - `submit_analysis_job.sh` - SLURM job submission script
 
+### Geometry Analysis Scripts
+
+- `delay_discounting_geometry_analysis.py` - Specialized delay discounting geometry analysis
+- `geometric_transformation_analysis.py` - Advanced geometric transformation methods
+- `dd_geometry_config.json` - Configuration for geometry analyses
+
 ### Configuration
 
 - `requirements.txt` - Python package dependencies
 - `Dataset_Descriptor_Files/` - Data descriptors and quality control
+
+### Documentation
+
+- `DELAY_DISCOUNTING_GEOMETRY_README.md` - Comprehensive geometry analysis documentation
+- `Prompts/` - Development prompts and specifications
 
 ## Usage
 
@@ -124,6 +143,30 @@ sbatch submit_analysis_job.sh
 python analyze_results.py
 ```
 
+### 5. Neural Geometry Analysis (Optional)
+
+#### Run Specialized Delay Discounting Geometry Analysis
+```bash
+# For extracted ROI data
+python delay_discounting_geometry_analysis.py \
+    --neural-data roi_timeseries.npy \
+    --behavioral-data trial_data.csv \
+    --roi-name "DLPFC" \
+    --config dd_geometry_config.json
+
+# Test with example data
+python delay_discounting_geometry_analysis.py --example
+```
+
+#### Available Geometry Comparisons
+- `choice` - Sooner-smaller vs larger-later choices
+- `delay_short_vs_long` - Short vs long delays  
+- `delay_immediate_vs_delayed` - Immediate vs delayed trials
+- `sv_chosen_median` - High vs low chosen option values
+- `sv_unchosen_median` - High vs low unchosen option values
+- `sv_difference_median` - High vs low subjective value differences
+- `value_diff_terciles` - Similar vs different option values (choice difficulty)
+
 ## Output Structure
 
 ```
@@ -138,6 +181,12 @@ analysis_outputs/
 ├── group_mvpa_statistics.csv   # Group-level MVPA stats
 └── summary_report.txt          # Comprehensive text report
 
+dd_geometry_results/            # Specialized geometry analysis outputs
+├── {ROI}_{comparison}_results.json      # Detailed geometry results
+├── {ROI}_summary_report.txt            # Text summary
+└── visualizations/                     # Advanced geometry plots
+    └── {ROI}_{comparison}_advanced_geometry.png
+
 masks/
 ├── striatum_mask.nii.gz        # Anatomical ROI masks
 ├── dlpfc_mask.nii.gz
@@ -146,6 +195,15 @@ masks/
 ```
 
 ## Key Features
+
+### Advanced Neural Geometry Analysis
+- **Specialized Delay Discounting Comparisons**: Choice types, delay categories, subjective value splits
+- **Manifold Alignment Analysis**: Procrustes and CCA methods for comparing neural manifolds
+- **Information-Theoretic Measures**: KL/JS divergence and Wasserstein distance between conditions  
+- **Geodesic Distance Analysis**: Non-linear manifold distances using Isomap
+- **Curvature Estimation**: Local geometric complexity of neural representations
+- **Comprehensive Visualizations**: 6-panel advanced geometry plots for each comparison
+- **Statistical Rigor**: Permutation testing for geometric separation measures
 
 ### Quality Control
 - Behavioral data validation (minimum trials, choice variability)
@@ -167,6 +225,7 @@ masks/
 - Behavioral parameter distributions
 - MVPA decoding accuracy plots
 - Neural geometry correlation heatmaps
+- **Advanced geometry visualizations**: Manifold alignment, information geometry, curvature analysis
 - Comprehensive statistical reporting
 
 ## Customization
@@ -182,6 +241,13 @@ masks/
 1. Modify `BehavioralAnalysis.process_subject_behavior()` 
 2. Add variables to MVPA and geometry analysis sections
 3. Update visualization scripts
+
+### Customizing Geometry Analysis
+
+1. **Add new comparison types**: Modify `DelayDiscountingGeometryAnalyzer` class
+2. **Adjust advanced methods**: Configure parameters in `dd_geometry_config.json`
+3. **Custom visualizations**: Extend `visualize_advanced_geometry_results()` method
+4. **Performance tuning**: Adjust neighbor counts and enable/disable specific analyses
 
 ### Changing Analysis Parameters
 
@@ -199,9 +265,14 @@ class Config:
 
 - **Python**: ≥3.8
 - **Core**: numpy, scipy, pandas, matplotlib, seaborn
-- **ML**: scikit-learn, statsmodels
+- **ML**: scikit-learn (≥0.24.0), statsmodels
 - **Neuroimaging**: nibabel, nilearn
 - **Utilities**: joblib, tqdm, pathlib
+
+### Advanced Geometry Requirements
+- **scikit-learn ≥0.24.0**: For Isomap and CCA analysis
+- **scipy ≥1.7.0**: For advanced statistical functions (KDE, information theory)
+- **matplotlib ≥3.3.0**: For 3D visualizations and advanced plotting
 
 ## Citation
 
