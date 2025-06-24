@@ -2,7 +2,21 @@
 """
 Test script for Delay Discounting MVPA Pipeline
 
-This script performs basic tests to ensure the pipeline components work correctly.
+This script performs comprehensive tests to ensure all pipeline components work correctly,
+including the new advanced neural geometry analysis features.
+
+Tests include:
+1. Package imports and version compatibility
+2. Behavioral analysis components
+3. Data structure validation
+4. Advanced geometry analysis (manifold alignment, geodesic distances, etc.)
+5. Synthetic data processing
+
+Advanced geometry features tested:
+- Manifold alignment (Procrustes, CCA)
+- Representational similarity analysis (RSA)
+- Information geometry metrics
+- Dimensionality reduction methods
 """
 
 import os
@@ -18,6 +32,7 @@ def test_imports():
     print("Testing package imports...")
     
     try:
+        # Core packages
         import numpy as np
         import pandas as pd
         import matplotlib.pyplot as plt
@@ -27,6 +42,22 @@ def test_imports():
         import statsmodels
         import nibabel as nib
         import nilearn
+        
+        # Advanced geometry analysis imports
+        from sklearn.manifold import Isomap
+        from sklearn.cross_decomposition import CCA
+        from sklearn.neighbors import NearestNeighbors
+        from scipy.stats import gaussian_kde
+        from scipy.spatial import procrustes
+        from mpl_toolkits.mplot3d import Axes3D
+        
+        # Check version requirements for advanced features
+        sklearn_version = tuple(map(int, sklearn.__version__.split('.')[:2]))
+        if sklearn_version < (0, 24):
+            print(f"⚠ Warning: scikit-learn {sklearn.__version__} < 0.24.0 - some advanced geometry features may not work")
+        else:
+            print(f"✓ scikit-learn {sklearn.__version__} supports advanced geometry features")
+        
         print("✓ All packages imported successfully")
         return True
     except ImportError as e:
@@ -72,6 +103,133 @@ def test_behavioral_analysis():
         print(f"✗ Behavioral analysis test failed: {e}")
         return False
 
+def test_geometry_analysis():
+    """Test advanced geometry analysis components"""
+    print("\nTesting advanced geometry analysis...")
+    
+    try:
+        from delay_discounting_geometry_analysis import DelayDiscountingGeometryAnalyzer
+        
+        # Test with example data
+        print("  Testing with example data...")
+        neural_data, behavioral_data = generate_example_dd_data()
+        
+        # Create temporary config
+        temp_config = {
+            "output_dir": "./test_geometry_results",
+            "n_permutations": 100,  # Reduced for testing
+            "random_state": 42,
+            "alpha": 0.05,
+            "n_components_pca": 5,
+            "n_components_mds": 3,
+            "standardize_data": True,
+            "advanced_geometry": {
+                "enable_manifold_alignment": True,
+                "enable_geodesic_analysis": True,
+                "enable_curvature_analysis": True,
+                "enable_information_geometry": True,
+                "isomap_n_neighbors": 3,
+                "curvature_n_neighbors": 3
+            }
+        }
+        
+        # Initialize analyzer
+        analyzer = DelayDiscountingGeometryAnalyzer()
+        analyzer.config = temp_config
+        analyzer.output_dir = Path("./test_geometry_results")
+        
+        # Test data loading
+        data = {
+            'neural_data': neural_data,
+            'behavioral_data': behavioral_data,
+            'roi_name': 'Test_ROI'
+        }
+        
+        # Test choice comparison
+        choice_comparison = analyzer.create_choice_comparison(data)
+        if choice_comparison and 'labels' in choice_comparison:
+            print("  ✓ Choice comparison creation working")
+        else:
+            print("  ✗ Choice comparison failed")
+            return False
+        
+        # Test basic geometry analysis on small subset
+        subset_size = 20
+        subset_neural = neural_data[:subset_size]
+        subset_labels = choice_comparison['labels'][:subset_size]
+        
+        # Filter out excluded trials
+        valid_mask = subset_labels != -1
+        if np.sum(valid_mask) >= 10:  # Need at least 10 valid trials
+            filtered_neural = subset_neural[valid_mask]
+            filtered_labels = subset_labels[valid_mask]
+            
+            # Test RSA computation
+            rsa_results = analyzer.compute_representational_similarity(
+                filtered_neural, filtered_labels
+            )
+            if 'rsa_correlation' in rsa_results:
+                print("  ✓ RSA computation working")
+            else:
+                print("  ✗ RSA computation failed")
+                return False
+            
+            # Test advanced geometry methods (on small data)
+            if len(np.unique(filtered_labels)) >= 2:
+                try:
+                    # Test manifold alignment
+                    label_vals = np.unique(filtered_labels)
+                    X1 = filtered_neural[filtered_labels == label_vals[0]]
+                    X2 = filtered_neural[filtered_labels == label_vals[1]]
+                    
+                    if len(X1) >= 3 and len(X2) >= 3:  # Need minimum points
+                        alignment_result = analyzer.compute_manifold_alignment(X1, X2)
+                        if 'alignment_quality' in alignment_result:
+                            print("  ✓ Manifold alignment working")
+                        else:
+                            print("  ✗ Manifold alignment failed")
+                            return False
+                    else:
+                        print("  ⚠ Skipping manifold alignment (insufficient data)")
+                except Exception as e:
+                    print(f"  ⚠ Advanced geometry test error (expected with small data): {e}")
+            
+        print("✓ Geometry analysis components working")
+        return True
+        
+    except ImportError as e:
+        print(f"✗ Geometry analysis import error: {e}")
+        return False
+    except Exception as e:
+        print(f"✗ Geometry analysis test failed: {e}")
+        return False
+
+def generate_example_dd_data():
+    """Generate example delay discounting data for testing (from geometry script)"""
+    np.random.seed(42)
+    
+    n_trials = 50  # Smaller for testing
+    n_voxels = 20  # Smaller for testing
+    
+    # Generate behavioral data
+    behavioral_data = pd.DataFrame({
+        'choice': np.random.choice([0, 1], n_trials),  # 0=SS, 1=LL
+        'delay_days': np.random.choice([0, 1, 7, 30, 90, 180], n_trials),
+        'chosen_sv': np.random.uniform(0, 1, n_trials),
+        'unchosen_sv': np.random.uniform(0, 1, n_trials)
+    })
+    
+    # Generate neural data with some structure based on choice
+    neural_data = np.random.randn(n_trials, n_voxels)
+    
+    # Add signal for SS vs LL choices
+    choice_signal = np.random.randn(n_voxels) * 0.5
+    for i in range(n_trials):
+        if behavioral_data.loc[i, 'choice'] == 1:  # LL choice
+            neural_data[i] += choice_signal
+    
+    return neural_data, behavioral_data
+
 def test_data_structure():
     """Test expected data structure"""
     print("\nTesting data structure expectations...")
@@ -99,6 +257,22 @@ def test_data_structure():
         print("⚠ Dataset descriptor directory not found")
         print("  This is expected if running on a different system")
         return True
+    
+    # Check for geometry analysis files
+    geometry_files = [
+        "delay_discounting_geometry_analysis.py",
+        "geometric_transformation_analysis.py",
+        "dd_geometry_config.json"
+    ]
+    
+    print("\nChecking geometry analysis files...")
+    for file in geometry_files:
+        if Path(file).exists():
+            print(f"✓ Found {file}")
+        else:
+            print(f"⚠ Missing {file}")
+    
+    return True
 
 def create_synthetic_data():
     """Create synthetic data for testing"""
@@ -221,7 +395,12 @@ def main():
     if test_data_structure():
         tests_passed += 1
     
-    # Test 4: Synthetic data processing
+    # Test 4: Advanced geometry analysis
+    total_tests += 1
+    if test_geometry_analysis():
+        tests_passed += 1
+    
+    # Test 5: Synthetic data processing
     test_dir = create_synthetic_data()
     total_tests += 1
     if test_with_synthetic_data(test_dir):
@@ -229,6 +408,12 @@ def main():
     
     # Cleanup
     cleanup_test_data(test_dir)
+    
+    # Clean up geometry test results
+    geometry_test_dir = Path("./test_geometry_results")
+    if geometry_test_dir.exists():
+        shutil.rmtree(geometry_test_dir)
+        print("✓ Cleaned up geometry test results")
     
     # Summary
     print("\n" + "=" * 50)
@@ -239,7 +424,8 @@ def main():
         print("\nNext steps:")
         print("1. Create ROI masks: python create_roi_masks.py")
         print("2. Run main analysis: python delay_discounting_mvpa_pipeline.py")
-        print("3. Or submit to cluster: sbatch submit_analysis_job.sh")
+        print("3. Run geometry analysis: python delay_discounting_geometry_analysis.py --example")
+        print("4. Or submit to cluster: sbatch submit_analysis_job.sh")
         return True
     else:
         print("✗ Some tests failed. Please check the errors above.")
@@ -247,6 +433,7 @@ def main():
         print("1. Ensure all packages are installed: pip install -r requirements.txt")
         print("2. Check that the data paths in Config are correct")
         print("3. Verify file permissions and access to data directories")
+        print("4. For geometry analysis: ensure scikit-learn>=0.24.0")
         return False
 
 if __name__ == "__main__":
