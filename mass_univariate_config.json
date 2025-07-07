@@ -1,0 +1,87 @@
+{
+  "preprocessing": {
+    "smoothing_fwhm": 4.0,
+    "high_pass_filter": 0.0078125,
+    "standardize": false,
+    "signal_scaling": 0
+  },
+  "glm_parameters": {
+    "tr": 0.68,
+    "slice_time_ref": 0.5,
+    "hrf_model": "spm",
+    "drift_model": "cosine",
+    "trial_duration": 4.0,
+    "hemodynamic_lag": 4
+  },
+  "confounds": {
+    "motion_parameters": ["trans_x", "trans_y", "trans_z", "rot_x", "rot_y", "rot_z"],
+    "motion_derivatives": ["trans_x_derivative1", "trans_y_derivative1", "trans_z_derivative1", 
+                          "rot_x_derivative1", "rot_y_derivative1", "rot_z_derivative1"],
+    "physiological": ["csf", "white_matter", "global_signal"],
+    "aroma_components": true
+  },
+  "models": {
+    "model_1_choice": {
+      "name": "Choice (Sooner-Smaller vs Larger-Later)",
+      "description": "Binary choice regressor contrasting immediate vs delayed rewards",
+      "regressors": ["choice"],
+      "contrasts": {
+        "choice_effect": "choice"
+      }
+    },
+    "model_2_sv_chosen": {
+      "name": "Subjective Value - Chosen Option",
+      "description": "Parametric regressor for subjective value of chosen option",
+      "regressors": ["sv_chosen"],
+      "contrasts": {
+        "sv_chosen_effect": "sv_chosen"
+      }
+    },
+    "model_3_sv_unchosen": {
+      "name": "Subjective Value - Unchosen Option",
+      "description": "Parametric regressor for subjective value of unchosen option",
+      "regressors": ["sv_unchosen"],
+      "contrasts": {
+        "sv_unchosen_effect": "sv_unchosen"
+      }
+    },
+    "model_4_sv_both": {
+      "name": "SV Chosen vs Unchosen",
+      "description": "Both chosen and unchosen SV with direct contrast",
+      "regressors": ["sv_chosen", "sv_unchosen"],
+      "contrasts": {
+        "sv_chosen_effect": "sv_chosen",
+        "sv_unchosen_effect": "sv_unchosen",
+        "sv_chosen_vs_unchosen": "sv_chosen - sv_unchosen"
+      }
+    },
+    "model_5_difficulty": {
+      "name": "Choice Difficulty (SV Difference)",
+      "description": "Choice difficulty based on subjective value difference",
+      "regressors": ["sv_difference", "choice"],
+      "contrasts": {
+        "difficulty_effect": "sv_difference",
+        "choice_effect": "choice"
+      }
+    }
+  },
+  "multiple_comparisons": {
+    "alpha": 0.05,
+    "methods": ["fdr", "cluster"],
+    "cluster_threshold": 10,
+    "cluster_forming_threshold": 0.001
+  },
+  "output": {
+    "save_design_matrices": true,
+    "save_residuals": false,
+    "create_reports": true,
+    "plot_format": "png",
+    "dpi": 300
+  },
+  "quality_control": {
+    "min_behavioral_accuracy": 0.6,
+    "max_reaction_time": 10.0,
+    "motion_threshold": 3.0,
+    "exclude_outlier_runs": true
+  }
+} 
