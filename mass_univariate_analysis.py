@@ -163,6 +163,9 @@ class MassUnivariateAnalysis:
         # Process and create regressors
         events_df['choice'] = events_df['response'].map({1: 0, 2: 1})  # 0=SS, 1=LL
         
+        # Create trial_type based on choice for proper contrast setup
+        events_df['trial_type'] = events_df['choice'].map({0: 'sooner_smaller', 1: 'larger_later'})
+        
         # Calculate subjective values (assuming they exist or need to be computed)
         if 'sv_chosen' not in events_df.columns:
             # If SV not pre-computed, calculate using behavioral model
@@ -173,6 +176,8 @@ class MassUnivariateAnalysis:
         
         # Set trial duration (4000ms = 4 seconds)
         events_df['duration'] = 4.0
+        
+        # trial_type already set based on choice above
         
         # Remove invalid trials
         valid_mask = (~events_df['choice'].isna()) & (~events_df['sv_chosen'].isna())
@@ -301,8 +306,9 @@ class MassUnivariateAnalysis:
             # Get model specification
             model_spec = self.models[model_name]
             
-            # Create design matrix for this model
-            design_events = events_df[['onset', 'duration'] + model_spec['regressors']].copy()
+            # Create design matrix for this model - include trial_type as required by nilearn
+            required_cols = ['onset', 'duration', 'trial_type'] + model_spec['regressors']
+            design_events = events_df[required_cols].copy()
             
             # Initialize first-level model
             first_level_model = FirstLevelModel(
@@ -323,12 +329,32 @@ class MassUnivariateAnalysis:
                 confounds=confounds_df
             )
             
+            # Get design matrix to check available columns
+            design_matrix = first_level_model.design_matrices_[0]
+            available_columns = list(design_matrix.columns)
+            print(f"Available design matrix columns for {worker_id}: {available_columns}")
+            
             # Compute contrasts
             contrast_maps = {}
             for contrast_name, contrast_def in model_spec['contrasts'].items():
                 try:
+                    # Check if contrast definition needs to be mapped to actual column names
+                    if contrast_def == 'choice':
+                        # Map choice contrast to actual available columns
+                        if 'larger_later' in available_columns and 'sooner_smaller' in available_columns:
+                            actual_contrast = 'larger_later - sooner_smaller'
+                        elif 'larger_later' in available_columns:
+                            actual_contrast = 'larger_later'
+                        elif 'sooner_smaller' in available_columns:
+                            actual_contrast = 'sooner_smaller'
+                        else:
+                            print(f"Warning: No choice-related columns found for {worker_id}")
+                            continue
+                    else:
+                        actual_contrast = contrast_def
+                    
                     contrast_map = first_level_model.compute_contrast(
-                        contrast_def, output_type='z_score'
+                        actual_contrast, output_type='z_score'
                     )
                     
                     # Save contrast map

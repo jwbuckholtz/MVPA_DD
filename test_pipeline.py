@@ -6,7 +6,7 @@ This script performs comprehensive tests to ensure all pipeline components work 
 including the new advanced neural geometry analysis features.
 
 Tests include:
-1. Package imports and version compatibility
+1. Package imports and version compatibilitygi
 2. Behavioral analysis components
 3. Data structure validation
 4. Advanced geometry analysis (manifold alignment, geodesic distances, etc.)
