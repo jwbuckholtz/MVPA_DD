@@ -18,7 +18,7 @@ class OAKConfig:
     BEHAVIOR_DIR = f"{DATA_ROOT}/behavioral_data/event_files"
     
     # Output directories - NOW ON OAK
-    OAK_OUTPUT_ROOT = "/oak/stanford/groups/russpold/data/uh2/aim1/derivatives/mvpa_analysis"
+    OAK_OUTPUT_ROOT = f"/oak/stanford/groups/russpold/users/{os.getenv('USER', 'your_username')}"
     OUTPUT_DIR = f"{OAK_OUTPUT_ROOT}/delay_discounting_results"
     BEHAVIOR_OUTPUT = f"{OUTPUT_DIR}/behavioral_analysis"
     MVPA_OUTPUT = f"{OUTPUT_DIR}/mvpa_analysis"
@@ -27,13 +27,14 @@ class OAKConfig:
     # Alternative: Store in your personal OAK space
     # USER_OAK_DIR = f"/oak/stanford/groups/russpold/users/{os.getenv('USER', 'your_username')}"
     # OUTPUT_DIR = f"{USER_OAK_DIR}/delay_discounting_mvpa_results"
+    #  "/oak/stanford/groups/russpold/data/uh2/aim1/derivatives/mvpa_analysis"
     
     # Analysis parameters (same as original)
-    TR = 1.0  # Repetition time in seconds
+    TR = .68  # Repetition time in seconds
     HEMI_LAG = 4  # Hemodynamic lag in TRs
     
     # ROI masks (should also be on OAK or accessible path)
-    MASKS_DIR = f"{DATA_ROOT}/derivatives/masks"  # Store masks on OAK too
+    MASKS_DIR = f"{OUTPUT_DIR}/masks"  # Store masks on OAK too
     ROI_MASKS = {
         'striatum': f'{MASKS_DIR}/striatum_mask.nii.gz',
         'dlpfc': f'{MASKS_DIR}/dlpfc_mask.nii.gz',
