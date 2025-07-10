@@ -9,8 +9,9 @@ This pipeline is designed for cognitive neuroscience researchers studying delay 
 1. **Behavioral Analysis**: Hyperbolic discounting parameter estimation
 2. **MVPA Decoding**: Classification and regression on neural data  
 3. **Neural Geometry**: Low-dimensional embedding analysis
-4. **Data Utilities**: Centralized data loading and validation system (NEW!)
-5. **Visualization**: Comprehensive results plotting and reporting
+4. **Data Utilities**: Centralized data loading and validation system
+5. **MVPA Utilities**: Centralized machine learning procedures (NEW!)
+6. **Visualization**: Comprehensive results plotting and reporting
 
 ## Dataset
 
@@ -88,6 +89,13 @@ The pipeline fits hyperbolic discounting models to choice data:
 - `geometric_transformation_analysis.py` - Advanced geometric transformation methods
 - `dd_geometry_config.json` - Configuration for geometry analyses
 
+### Utility Modules
+
+- `data_utils.py` - Centralized data loading, validation, and integrity checking
+- `mvpa_utils.py` - Centralized MVPA procedures and machine learning operations (NEW!)
+- `demo_data_utils.py` - Demonstration script for data utilities
+- `demo_mvpa_utils.py` - Demonstration script for MVPA utilities (NEW!)
+
 ### Configuration
 
 - `requirements.txt` - Python package dependencies
@@ -96,6 +104,8 @@ The pipeline fits hyperbolic discounting models to choice data:
 ### Documentation
 
 - `DELAY_DISCOUNTING_GEOMETRY_README.md` - Comprehensive geometry analysis documentation
+- `DATA_UTILS_README.md` - Complete data utilities documentation and usage guide
+- `MVPA_UTILS_README.md` - Complete MVPA utilities documentation and usage guide (NEW!)
 - `Prompts/` - Development prompts and specifications
 
 ## Usage

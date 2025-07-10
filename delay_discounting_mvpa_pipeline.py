@@ -57,11 +57,19 @@ import multiprocessing as mp
 # Configuration
 from oak_storage_config import OAKConfig as Config
 
-# Data utilities (NEW!)
+# Data utilities
 from data_utils import (
     load_behavioral_data, load_fmri_data, load_confounds, 
     extract_roi_timeseries, get_complete_subjects, check_mask_exists,
     load_mask, DataError, SubjectManager
+)
+
+# MVPA utilities (NEW!)
+from mvpa_utils import (
+    run_classification, run_regression, extract_neural_patterns,
+    run_dimensionality_reduction, MVPAConfig, MVPAError,
+    run_choice_classification, run_continuous_decoding,
+    update_mvpa_config
 )
 
 class BehavioralAnalysis:
@@ -343,6 +351,8 @@ class MVPAAnalysis:
         """
         Extract trial-wise neural data using GLM approach
         
+        Uses centralized MVPA utilities for consistent implementation.
+        
         Parameters:
         -----------
         img : nibabel image
@@ -363,35 +373,26 @@ class MVPAAnalysis:
         
         masker = self.maskers[roi_name]
         
-        # Fit masker and extract time series
-        if confounds is not None:
-            X = masker.fit_transform(img, confounds=confounds)
+        # Use centralized pattern extraction
+        result = extract_neural_patterns(
+            img, events_df, masker,
+            confounds=confounds,
+            pattern_type='single_timepoint',
+            tr=self.config.TR,
+            hemi_lag=self.config.HEMI_LAG
+        )
+        
+        if result['success']:
+            return result['patterns']
         else:
-            X = masker.fit_transform(img)
-        
-        # Extract trial-wise data using onset times
-        n_trials = len(events_df)
-        n_voxels = X.shape[1]
-        trial_data = np.zeros((n_trials, n_voxels))
-        
-        for i, (_, trial) in enumerate(events_df.iterrows()):
-            onset_tr = int(trial['onset'] / self.config.TR)
-            
-            # Extract activity from onset + hemodynamic lag
-            trial_tr = onset_tr + self.config.HEMI_LAG
-            
-            if trial_tr < X.shape[0]:
-                trial_data[i, :] = X[trial_tr, :]
-            else:
-                # Handle edge case where trial extends beyond scan
-                trial_data[i, :] = X[-1, :]
-        
-        return trial_data
+            raise MVPAError(f"Pattern extraction failed: {result['error']}")
     
     def extract_trial_patterns(self, img, events_df, roi_name, confounds=None, 
                               pattern_type='single_timepoint', window_size=3):
         """
         Extract trial-wise neural patterns with different extraction methods
+        
+        Uses centralized MVPA utilities for consistent implementation.
         
         Parameters:
         -----------
@@ -421,125 +422,21 @@ class MVPAAnalysis:
         
         masker = self.maskers[roi_name]
         
-        # Fit masker and extract time series
-        if confounds is not None:
-            X = masker.fit_transform(img, confounds=confounds)
-        else:
-            X = masker.fit_transform(img)
-        
-        n_trials = len(events_df)
-        n_voxels = X.shape[1]
-        
-        results = {
-            'pattern_type': pattern_type,
-            'n_trials': n_trials,
-            'n_voxels': n_voxels,
-            'window_size': window_size
-        }
-        
-        if pattern_type == 'single_timepoint':
-            # Extract single timepoint at hemodynamic peak
-            trial_data = np.zeros((n_trials, n_voxels))
-            
-            for i, (_, trial) in enumerate(events_df.iterrows()):
-                onset_tr = int(trial['onset'] / self.config.TR)
-                trial_tr = onset_tr + self.config.HEMI_LAG
-                
-                if trial_tr < X.shape[0]:
-                    trial_data[i, :] = X[trial_tr, :]
-                else:
-                    trial_data[i, :] = X[-1, :]
-            
-            results['patterns'] = trial_data
-            
-        elif pattern_type == 'average_window':
-            # Average over time window around hemodynamic peak
-            trial_data = np.zeros((n_trials, n_voxels))
-            
-            for i, (_, trial) in enumerate(events_df.iterrows()):
-                onset_tr = int(trial['onset'] / self.config.TR)
-                peak_tr = onset_tr + self.config.HEMI_LAG
-                
-                # Define window
-                start_tr = max(0, peak_tr - window_size // 2)
-                end_tr = min(X.shape[0], peak_tr + window_size // 2 + 1)
-                
-                # Average over window
-                if start_tr < end_tr:
-                    trial_data[i, :] = np.mean(X[start_tr:end_tr, :], axis=0)
-                else:
-                    trial_data[i, :] = X[peak_tr, :] if peak_tr < X.shape[0] else X[-1, :]
-            
-            results['patterns'] = trial_data
-            results['window_start'] = start_tr
-            results['window_end'] = end_tr
-            
-        elif pattern_type == 'temporal_profile':
-            # Extract full temporal profile for each trial
-            profile_length = window_size * 2 + 1  # Window around peak
-            trial_profiles = np.zeros((n_trials, n_voxels, profile_length))
-            
-            for i, (_, trial) in enumerate(events_df.iterrows()):
-                onset_tr = int(trial['onset'] / self.config.TR)
-                peak_tr = onset_tr + self.config.HEMI_LAG
-                
-                start_tr = max(0, peak_tr - window_size)
-                end_tr = min(X.shape[0], peak_tr + window_size + 1)
-                
-                # Extract profile
-                profile = X[start_tr:end_tr, :]
-                
-                # Pad if necessary
-                if profile.shape[0] < profile_length:
-                    padding = np.zeros((profile_length - profile.shape[0], n_voxels))
-                    profile = np.vstack([profile, padding])
-                
-                trial_profiles[i, :, :] = profile.T
-            
-            results['patterns'] = trial_profiles
-            results['profile_length'] = profile_length
-            
-        elif pattern_type == 'peak_detection':
-            # Automatically detect peak response for each trial
-            trial_data = np.zeros((n_trials, n_voxels))
-            peak_times = np.zeros(n_trials)
-            
-            for i, (_, trial) in enumerate(events_df.iterrows()):
-                onset_tr = int(trial['onset'] / self.config.TR)
-                
-                # Search window: 2-8 TRs after onset (typical HRF range)
-                search_start = onset_tr + 2
-                search_end = min(X.shape[0], onset_tr + 8)
-                
-                if search_start < search_end:
-                    # Find peak as maximum mean activity across voxels
-                    search_window = X[search_start:search_end, :]
-                    mean_activity = np.mean(search_window, axis=1)
-                    peak_idx = np.argmax(mean_activity)
-                    peak_tr = search_start + peak_idx
-                    
-                    trial_data[i, :] = X[peak_tr, :]
-                    peak_times[i] = peak_tr
-                else:
-                    # Fallback to standard hemodynamic lag
-                    peak_tr = onset_tr + self.config.HEMI_LAG
-                    if peak_tr < X.shape[0]:
-                        trial_data[i, :] = X[peak_tr, :]
-                    else:
-                        trial_data[i, :] = X[-1, :]
-                    peak_times[i] = peak_tr
-            
-            results['patterns'] = trial_data
-            results['peak_times'] = peak_times
-        
-        else:
-            raise ValueError(f"Unknown pattern_type: {pattern_type}")
-        
-        return results
+        # Use centralized pattern extraction
+        return extract_neural_patterns(
+            img, events_df, masker,
+            confounds=confounds,
+            pattern_type=pattern_type,
+            tr=self.config.TR,
+            hemi_lag=self.config.HEMI_LAG,
+            window_size=window_size
+        )
     
     def decode_choices(self, X, y, roi_name):
         """
         Decode choice (smaller_sooner vs larger_later) from neural data
+        
+        Uses centralized MVPA utilities for consistent implementation.
         
         Parameters:
         -----------
@@ -554,39 +451,19 @@ class MVPAAnalysis:
         --------
         dict : Decoding results
         """
-        if len(np.unique(y)) < 2:
-            return {'success': False, 'error': 'Insufficient choice variability'}
-        
-        # Prepare classifier
-        classifier = SVC(kernel='linear', C=1.0, random_state=42)
-        
-        # Cross-validation
-        cv = StratifiedKFold(n_splits=self.config.CV_FOLDS, shuffle=True, random_state=42)
-        
-        # Perform cross-validation
-        scores = cross_val_score(classifier, X, y, cv=cv, scoring='accuracy', n_jobs=1)
-        
-        # Permutation test
-        score_perm, perm_scores, p_value = permutation_test_score(
-            classifier, X, y, cv=cv, n_permutations=self.config.N_PERMUTATIONS,
-            scoring='accuracy', n_jobs=1, random_state=42
+        return run_choice_classification(
+            X, y, 
+            roi_name=roi_name,
+            algorithm='svm',
+            cv_strategy='stratified',
+            n_permutations=self.config.N_PERMUTATIONS
         )
-        
-        return {
-            'success': True,
-            'roi': roi_name,
-            'mean_accuracy': np.mean(scores),
-            'std_accuracy': np.std(scores),
-            'scores': scores,
-            'permutation_accuracy': score_perm,
-            'permutation_scores': perm_scores,
-            'p_value': p_value,
-            'chance_level': np.mean(y)
-        }
     
     def decode_continuous_variable(self, X, y, roi_name, variable_name):
         """
         Decode continuous variable (e.g., subjective value) from neural data
+        
+        Uses centralized MVPA utilities for consistent implementation.
         
         Parameters:
         -----------
@@ -603,33 +480,14 @@ class MVPAAnalysis:
         --------
         dict : Decoding results
         """
-        # Prepare regressor
-        regressor = Ridge(alpha=1.0, random_state=42)
-        
-        # Cross-validation
-        cv = StratifiedKFold(n_splits=self.config.CV_FOLDS, shuffle=True, random_state=42)
-        
-        # Perform cross-validation
-        scores = cross_val_score(regressor, X, y, cv=cv, scoring='r2', n_jobs=1)
-        
-        # Permutation test
-        y_perm = np.random.permutation(y)
-        score_perm, perm_scores, p_value = permutation_test_score(
-            regressor, X, y_perm, cv=cv, n_permutations=self.config.N_PERMUTATIONS,
-            scoring='r2', n_jobs=1, random_state=42
+        return run_continuous_decoding(
+            X, y,
+            variable_name=variable_name,
+            roi_name=roi_name,
+            algorithm='ridge',
+            cv_strategy='kfold',
+            n_permutations=self.config.N_PERMUTATIONS
         )
-        
-        return {
-            'success': True,
-            'roi': roi_name,
-            'variable': variable_name,
-            'mean_r2': np.mean(scores),
-            'std_r2': np.std(scores),
-            'scores': scores,
-            'permutation_r2': score_perm,
-            'permutation_scores': perm_scores,
-            'p_value': p_value
-        }
 
 class GeometryAnalysis:
     """Class for neural geometry analysis"""
@@ -660,6 +518,8 @@ class GeometryAnalysis:
         """
         Perform dimensionality reduction on neural data
         
+        Uses centralized MVPA utilities for consistent implementation.
+        
         Parameters:
         -----------
         X : array
@@ -673,20 +533,14 @@ class GeometryAnalysis:
         --------
         array : Low-dimensional embedding (n_trials x n_components)
         """
-        if method == 'pca':
-            reducer = PCA(n_components=n_components, random_state=42)
-        elif method == 'mds':
-            reducer = MDS(n_components=n_components, random_state=42, dissimilarity='euclidean')
-        elif method == 'tsne':
-            reducer = TSNE(n_components=min(n_components, 3), random_state=42)
-        elif method == 'isomap':
-            reducer = Isomap(n_components=n_components)
+        result = run_dimensionality_reduction(
+            X, method=method, n_components=n_components
+        )
+        
+        if result['success']:
+            return result['embedding'], result['reducer']
         else:
-            raise ValueError(f"Unknown method: {method}")
-        
-        embedding = reducer.fit_transform(X)
-        
-        return embedding, reducer
+            raise MVPAError(f"Dimensionality reduction failed: {result['error']}")
     
     def behavioral_geometry_correlation(self, embedding, behavioral_vars):
         """
@@ -1368,6 +1222,13 @@ def main():
     fmri_preprocessing = fMRIPreprocessing(config)
     mvpa_analysis = MVPAAnalysis(config)
     geometry_analysis = GeometryAnalysis(config)
+    
+    # Configure MVPA utilities to match main config
+    update_mvpa_config(
+        cv_folds=config.CV_FOLDS,
+        n_permutations=config.N_PERMUTATIONS,
+        n_jobs=1  # Conservative for memory management
+    )
     
     # Create maskers
     mvpa_analysis.create_roi_maskers()
