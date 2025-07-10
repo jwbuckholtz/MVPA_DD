@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Create ROI masks for MVPA analysis
+Create ROI masks for MVPA analysis (REFACTORED to use data_utils)
 This script creates anatomical ROI masks for:
 - Striatum (caudate, putamen, nucleus accumbens)
 - DLPFC (Brodmann areas 9, 46)  
@@ -17,10 +17,20 @@ from nilearn import datasets, image, plotting
 from nilearn.regions import RegionExtractor
 import matplotlib.pyplot as plt
 
-def create_output_directory():
-    """Create masks directory"""
-    masks_dir = Path('./masks')
-    masks_dir.mkdir(exist_ok=True)
+# Data utilities (NEW!)
+from data_utils import check_mask_exists, DataError
+from oak_storage_config import OAKConfig
+
+def create_output_directory(output_dir=None):
+    """Create masks directory (REFACTORED to use config)"""
+    if output_dir is None:
+        # Use configuration
+        config = OAKConfig()
+        masks_dir = Path(config.MASKS_DIR)
+    else:
+        masks_dir = Path(output_dir)
+    
+    masks_dir.mkdir(parents=True, exist_ok=True)
     return masks_dir
 
 def create_striatum_mask(masks_dir):
@@ -226,13 +236,10 @@ def visualize_masks(mask_files):
     
     print("Mask visualization saved to ./masks/roi_masks_visualization.png")
 
-def main():
-    """Main function to create all ROI masks"""
-    print("Creating ROI Masks for Delay Discounting MVPA Analysis")
-    print("=" * 60)
-    
+def create_all_masks(output_dir=None, mni_template=None):
+    """Create all ROI masks (NEW function for data_utils integration)"""
     # Create output directory
-    masks_dir = create_output_directory()
+    masks_dir = create_output_directory(output_dir)
     
     # Create masks
     mask_files = []
@@ -245,20 +252,56 @@ def main():
     dlpfc_file = create_dlpfc_mask(masks_dir)
     mask_files.append(dlpfc_file)
     
-    # Custom DLPFC (optional, more precise)
-    # dlpfc_custom_file = create_custom_dlpfc_mask(masks_dir)
-    
     # VMPFC
     vmpfc_file = create_vmpfc_mask(masks_dir)
     mask_files.append(vmpfc_file)
     
-    # Create visualizations
-    visualize_masks(mask_files)
+    return mask_files
+
+def main():
+    """Main function to create all ROI masks (REFACTORED to use data_utils)"""
+    print("Creating ROI Masks for Delay Discounting MVPA Analysis")
+    print("=" * 60)
     
-    print("\nMask creation complete!")
-    print(f"Created {len(mask_files)} ROI masks:")
-    for mask_file in mask_files:
-        print(f"  - {mask_file}")
+    # Load configuration
+    config = OAKConfig()
+    
+    # Check which masks already exist
+    existing_masks = []
+    missing_masks = []
+    
+    for roi_name, mask_path in config.ROI_MASKS.items():
+        if check_mask_exists(mask_path):
+            existing_masks.append((roi_name, mask_path))
+            print(f"✓ {roi_name} mask already exists: {mask_path}")
+        else:
+            missing_masks.append((roi_name, mask_path))
+            print(f"✗ {roi_name} mask missing: {mask_path}")
+    
+    # Create missing masks if any
+    if missing_masks:
+        print(f"\nCreating {len(missing_masks)} missing masks...")
+        mask_files = create_all_masks(config.MASKS_DIR)
+        
+        # Create visualizations
+        visualize_masks(mask_files)
+        
+        print("\nMask creation complete!")
+        print(f"Created {len(mask_files)} ROI masks:")
+        for mask_file in mask_files:
+            print(f"  - {mask_file}")
+    else:
+        print("\nAll masks already exist!")
+        
+        # Still create visualization if it doesn't exist
+        viz_file = Path(config.MASKS_DIR) / 'roi_masks_visualization.png'
+        if not viz_file.exists():
+            existing_mask_files = [mask_path for _, mask_path in existing_masks]
+            visualize_masks(existing_mask_files)
+            print(f"Created visualization: {viz_file}")
+    
+    print(f"\nROI masks directory: {config.MASKS_DIR}")
+    print("Use these masks in your MVPA analysis pipeline!")
 
 if __name__ == "__main__":
     main() 

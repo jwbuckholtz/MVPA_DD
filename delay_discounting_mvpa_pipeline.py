@@ -57,6 +57,13 @@ import multiprocessing as mp
 # Configuration
 from oak_storage_config import OAKConfig as Config
 
+# Data utilities (NEW!)
+from data_utils import (
+    load_behavioral_data, load_fmri_data, load_confounds, 
+    extract_roi_timeseries, get_complete_subjects, check_mask_exists,
+    load_mask, DataError, SubjectManager
+)
+
 class BehavioralAnalysis:
     """Class for behavioral analysis and discounting parameter estimation"""
     
@@ -182,7 +189,7 @@ class BehavioralAnalysis:
     
     def process_subject_behavior(self, worker_id):
         """
-        Process behavioral data for a single subject
+        Process behavioral data for a single subject (REFACTORED to use data_utils)
         
         Parameters:
         -----------
@@ -193,76 +200,64 @@ class BehavioralAnalysis:
         --------
         dict : Processed behavioral data and fitted parameters
         """
-        # Load behavioral data
-        behavior_file = f"{self.config.BEHAVIOR_DIR}/{worker_id}_discountFix_events.tsv"
-        
-        if not os.path.exists(behavior_file):
-            return {'worker_id': worker_id, 'success': False, 'error': 'File not found'}
-        
         try:
-            df = pd.read_csv(behavior_file, sep='\t')
+            # Use centralized data loading (NEW!)
+            df_processed = load_behavioral_data(worker_id, self.config, 
+                                               validate=True, compute_sv=True)
             
             # Quality control
-            if len(df) == 0:
+            if len(df_processed) == 0:
                 return {'worker_id': worker_id, 'success': False, 'error': 'Empty file'}
             
-            # Convert choices to binary (1 = larger_later, 0 = smaller_sooner)
-            choices = (df['choice'] == 'larger_later').astype(int)
+            # Get choices (already processed by data_utils)
+            choices = df_processed['choice'].values
             
             # Check for minimum number of trials and choice variability
-            if len(choices) < 10 or choices.var() == 0:
+            valid_choices = choices[~np.isnan(choices)]
+            if len(valid_choices) < 10 or valid_choices.var() == 0:
                 return {'worker_id': worker_id, 'success': False, 
                        'error': 'Insufficient trials or no choice variability'}
             
-            # Fit discount rate
-            fit_results = self.fit_discount_rate(
-                choices.values,
-                df['large_amount'].values,
-                df['later_delay'].values
-            )
-            
-            if not fit_results['success']:
+            # Extract fit results if available, otherwise refit
+            if 'sv_chosen' in df_processed.columns:
+                # If subjective values computed successfully, extract discount rate
+                # Re-fit to get exact parameters for this analysis
+                valid_mask = ~np.isnan(choices)
+                fit_results = self.fit_discount_rate(
+                    choices[valid_mask],
+                    df_processed['large_amount'].values[valid_mask],
+                    df_processed['delay_days'].values[valid_mask]
+                )
+                
+                if not fit_results['success']:
+                    return {'worker_id': worker_id, 'success': False, 
+                           'error': fit_results['error']}
+                
+                k_fit = fit_results['k']
+                pseudo_r2 = fit_results['pseudo_r2']
+            else:
                 return {'worker_id': worker_id, 'success': False, 
-                       'error': fit_results['error']}
+                       'error': 'Subjective values not computed by data_utils'}
             
-            # Calculate trial-wise variables
-            k_fit = fit_results['k']
-            
-            # Calculate subjective values for each trial
-            sv_large = self.subjective_value(df['large_amount'], df['later_delay'], k_fit)
-            sv_small = 20.0  # Fixed amount for smaller_sooner
-            
-            # Calculate derived variables
-            sv_diff = sv_large - sv_small
-            sv_sum = sv_large + sv_small
-            
-            # Chosen and unchosen subjective values
-            sv_chosen = np.where(choices, sv_large, sv_small)
-            sv_unchosen = np.where(choices, sv_small, sv_large)
-            
-            # Add to dataframe
-            df_processed = df.copy()
+            # Add additional metadata
             df_processed['worker_id'] = worker_id
             df_processed['k'] = k_fit
-            df_processed['choice_binary'] = choices
-            df_processed['sv_large'] = sv_large
-            df_processed['sv_small'] = sv_small
-            df_processed['sv_diff'] = sv_diff
-            df_processed['sv_sum'] = sv_sum
-            df_processed['sv_chosen'] = sv_chosen
-            df_processed['sv_unchosen'] = sv_unchosen
-            df_processed['choice_prob'] = fit_results['choice_prob']
+            df_processed['choice_binary'] = choices  # For compatibility
+            if 'choice_prob' not in df_processed.columns:
+                df_processed['choice_prob'] = fit_results['choice_prob'][:len(df_processed)]
             
             return {
                 'worker_id': worker_id,
                 'success': True,
                 'data': df_processed,
                 'k': k_fit,
-                'pseudo_r2': fit_results['pseudo_r2'],
-                'n_trials': len(df),
-                'choice_rate': np.mean(choices)
+                'pseudo_r2': pseudo_r2,
+                'n_trials': len(df_processed),
+                'choice_rate': np.mean(valid_choices)
             }
             
+        except DataError as e:
+            return {'worker_id': worker_id, 'success': False, 'error': f'Data error: {str(e)}'}
         except Exception as e:
             return {'worker_id': worker_id, 'success': False, 'error': str(e)}
 
@@ -274,7 +269,7 @@ class fMRIPreprocessing:
         
     def load_subject_fmri(self, worker_id):
         """
-        Load preprocessed fMRI data for a subject
+        Load preprocessed fMRI data for a subject (REFACTORED to use data_utils)
         
         Parameters:
         -----------
@@ -285,47 +280,28 @@ class fMRIPreprocessing:
         --------
         dict : fMRI data and metadata
         """
-        # Construct path to fMRI data
-        fmri_dir = f"{self.config.FMRIPREP_DIR}/{worker_id}/ses-2/func"
-        
-        # Look for task-discountFix files
-        pattern = f"{worker_id}_ses-2_task-discountFix_*_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz"
-        
-        fmri_files = list(Path(fmri_dir).glob(pattern))
-        
-        if not fmri_files:
-            return {'success': False, 'error': 'No fMRI files found'}
-        
-        # Use the first run if multiple exist
-        fmri_file = fmri_files[0]
-        
         try:
-            # Load fMRI data
-            img = nib.load(str(fmri_file))
+            # Use centralized data loading (NEW!)
+            img = load_fmri_data(worker_id, self.config, smoothed=False, validate=True)
+            confounds_df = load_confounds(worker_id, self.config)
             
-            # Load confounds
-            confounds_file = str(fmri_file).replace('_desc-preproc_bold.nii.gz', 
-                                                   '_desc-confounds_timeseries.tsv')
-            
+            # Convert confounds to array if available
             confounds = None
-            if os.path.exists(confounds_file):
-                confounds_df = pd.read_csv(confounds_file, sep='\t')
-                
-                # Select relevant confounds
-                confound_cols = [col for col in confounds_df.columns if 
-                               any(x in col for x in ['trans_', 'rot_', 'csf', 'white_matter', 
-                                                     'global_signal', 'aroma', 'motion'])]
-                
-                if confound_cols:
-                    confounds = confounds_df[confound_cols].fillna(0).values
+            if confounds_df is not None:
+                confounds = confounds_df.values
+            
+            # Get file path for compatibility
+            file_path = img.get_filename()
             
             return {
                 'success': True,
                 'img': img,
                 'confounds': confounds,
-                'file_path': str(fmri_file)
+                'file_path': file_path
             }
             
+        except DataError as e:
+            return {'success': False, 'error': f'Data error: {str(e)}'}
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
@@ -1737,7 +1713,7 @@ def main():
 
 def get_subject_list(config):
     """
-    Get list of subjects with both behavioral and fMRI data
+    Get list of subjects with both behavioral and fMRI data (REFACTORED to use data_utils)
     
     Parameters:
     -----------
@@ -1748,27 +1724,11 @@ def get_subject_list(config):
     --------
     list : Subject IDs
     """
-    # Get subjects from behavioral data directory
-    behavior_files = list(Path(config.BEHAVIOR_DIR).glob("*_discountFix_events.tsv"))
-    behavioral_subjects = [f.stem.replace('_discountFix_events', '') for f in behavior_files]
+    # Use centralized subject discovery (NEW!)
+    subjects = get_complete_subjects(config)
+    print(f"Found {len(subjects)} subjects with complete data using data_utils")
     
-    # Get subjects from fMRI data directory  
-    fmri_subjects = []
-    if os.path.exists(config.FMRIPREP_DIR):
-        for subject_dir in Path(config.FMRIPREP_DIR).iterdir():
-            if subject_dir.is_dir():
-                # Check if ses-2/func directory exists with discountFix data
-                func_dir = subject_dir / "ses-2" / "func"
-                if func_dir.exists():
-                    discount_files = list(func_dir.glob("*task-discountFix*_bold.nii.gz"))
-                    if discount_files:
-                        fmri_subjects.append(subject_dir.name)
-    
-    # Return intersection of subjects with both behavioral and fMRI data
-    common_subjects = list(set(behavioral_subjects) & set(fmri_subjects))
-    print(f"Found {len(common_subjects)} subjects with both behavioral and fMRI data")
-    
-    return sorted(common_subjects)
+    return subjects
 
 if __name__ == "__main__":
     main() 

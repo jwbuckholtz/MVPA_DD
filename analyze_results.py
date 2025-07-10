@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Analyze and Visualize Results from Delay Discounting MVPA Pipeline
+Analyze and Visualize Results from Delay Discounting MVPA Pipeline (REFACTORED to use data_utils)
 
 This script processes the results from the main analysis pipeline and creates
 comprehensive visualizations and statistical summaries.
@@ -19,6 +19,13 @@ from scipy import stats
 from statsmodels.stats.multitest import multipletests
 import warnings
 warnings.filterwarnings('ignore')
+
+# Data utilities (NEW!)
+from data_utils import (
+    load_processed_data, check_data_integrity, get_complete_subjects,
+    SubjectManager, DataError
+)
+from oak_storage_config import OAKConfig
 
 # Set style
 plt.style.use('seaborn-v0_8')
@@ -42,10 +49,18 @@ class ResultsAnalyzer:
         self.output_dir.mkdir(exist_ok=True)
         
     def load_results(self):
-        """Load results from pickle file"""
-        with open(self.results_file, 'rb') as f:
-            results = pickle.load(f)
-        return results
+        """Load results from pickle file (REFACTORED to use data_utils)"""
+        try:
+            # Use centralized data loading (NEW!)
+            results, metadata = load_processed_data(self.results_file)
+            print(f"Loaded results with metadata: {metadata}")
+            return results
+        except DataError as e:
+            print(f"Data loading error: {e}")
+            # Fallback to original method
+            with open(self.results_file, 'rb') as f:
+                results = pickle.load(f)
+            return results
     
     def extract_behavioral_summary(self):
         """Extract behavioral statistics across subjects"""
@@ -366,18 +381,90 @@ class ResultsAnalyzer:
         
         print("Analysis complete!")
 
-def main():
-    """Main function"""
-    # Look for results file
-    results_file = "./delay_discounting_results/all_results.pkl"
+def check_pipeline_data_integrity():
+    """Check data integrity for all subjects (NEW function using data_utils)"""
+    print("Checking data integrity for all subjects...")
+    print("=" * 50)
     
-    if not os.path.exists(results_file):
-        print(f"Results file not found: {results_file}")
-        print("Please run the main analysis pipeline first.")
+    config = OAKConfig()
+    
+    # Get complete subjects
+    subjects = get_complete_subjects(config)
+    print(f"Found {len(subjects)} subjects with complete data")
+    
+    # Run comprehensive integrity check
+    integrity_report = check_data_integrity(subjects, config)
+    
+    # Display summary
+    print(f"\nData Integrity Summary:")
+    print(f"Total subjects checked: {len(integrity_report)}")
+    print(f"Complete subjects: {integrity_report['complete'].sum()}")
+    print(f"Subjects with fMRI: {integrity_report['has_fmri'].sum()}")
+    print(f"Subjects with behavior: {integrity_report['has_behavior'].sum()}")
+    print(f"Valid behavioral data: {integrity_report['behavior_valid'].sum()}")
+    print(f"Valid fMRI data: {integrity_report['fmri_valid'].sum()}")
+    
+    # Save report
+    report_file = Path('./data_integrity_report.csv')
+    integrity_report.to_csv(report_file, index=False)
+    print(f"\nDetailed report saved to: {report_file}")
+    
+    return integrity_report
+
+def main():
+    """Main function (ENHANCED with data_utils options)"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Analyze MVPA results or check data integrity')
+    parser.add_argument('--results_file', 
+                       help='Path to results pickle file (default: look for standard location)')
+    parser.add_argument('--output_dir', default='./analysis_outputs', 
+                       help='Output directory for plots')
+    parser.add_argument('--check_data', action='store_true',
+                       help='Check data integrity for all subjects')
+    
+    args = parser.parse_args()
+    
+    if args.check_data:
+        # Run data integrity check (NEW!)
+        check_pipeline_data_integrity()
         return
     
-    # Run analysis
+    # Look for results file
+    if args.results_file:
+        results_file = args.results_file
+    else:
+        # Try standard locations
+        config = OAKConfig()
+        possible_locations = [
+            f"{config.OUTPUT_DIR}/all_results.pkl",
+            "./delay_discounting_results/all_results.pkl",
+            "./all_results.pkl"
+        ]
+        
+        results_file = None
+        for location in possible_locations:
+            if os.path.exists(location):
+                results_file = location
+                break
+    
+    if not results_file or not os.path.exists(results_file):
+        print(f"Results file not found!")
+        print("Tried locations:")
+        for location in possible_locations:
+            print(f"  - {location}")
+        print("\nPlease run the main analysis pipeline first or specify --results_file")
+        print("Or use --check_data to check data integrity")
+        return
+    
+    print(f"Using results file: {results_file}")
+    
+    # Create analyzer
     analyzer = ResultsAnalyzer(results_file)
+    analyzer.output_dir = Path(args.output_dir)
+    analyzer.output_dir.mkdir(exist_ok=True)
+    
+    # Run analysis
     analyzer.run_analysis()
 
 if __name__ == "__main__":
