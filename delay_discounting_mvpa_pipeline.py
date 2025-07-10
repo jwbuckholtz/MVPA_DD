@@ -72,6 +72,11 @@ from mvpa_utils import (
     update_mvpa_config
 )
 
+# Add memory-efficient imports after existing imports
+from memory_efficient_data import (
+    MemoryEfficientLoader, MemoryConfig, create_memory_efficient_loader
+)
+
 class BehavioralAnalysis:
     """Class for behavioral analysis and discounting parameter estimation"""
     
@@ -272,42 +277,89 @@ class BehavioralAnalysis:
 class fMRIPreprocessing:
     """Class for fMRI data preprocessing and loading"""
     
-    def __init__(self, config):
+    def __init__(self, config, enable_memory_efficient=False, memory_config=None):
         self.config = config
+        self.enable_memory_efficient = enable_memory_efficient
         
-    def load_subject_fmri(self, worker_id):
+        # Initialize memory-efficient loader if requested
+        if self.enable_memory_efficient:
+            self.memory_loader = create_memory_efficient_loader(config, memory_config)
+        else:
+            self.memory_loader = None
+        
+    def load_subject_fmri(self, worker_id, force_memory_efficient=False):
         """
-        Load preprocessed fMRI data for a subject (REFACTORED to use data_utils)
+        Load preprocessed fMRI data for a subject
         
         Parameters:
         -----------
         worker_id : str
             Subject identifier
+        force_memory_efficient : bool
+            Force use of memory-efficient loading for this call
             
         Returns:
         --------
         dict : fMRI data and metadata
         """
         try:
-            # Use centralized data loading (NEW!)
-            img = load_fmri_data(worker_id, self.config, smoothed=False, validate=True)
-            confounds_df = load_confounds(worker_id, self.config)
+            # Decide whether to use memory-efficient loading
+            use_memory_efficient = (self.enable_memory_efficient or 
+                                  force_memory_efficient) and self.memory_loader
             
-            # Convert confounds to array if available
-            confounds = None
-            if confounds_df is not None:
-                confounds = confounds_df.values
-            
-            # Get file path for compatibility
-            file_path = img.get_filename()
-            
-            return {
-                'success': True,
-                'img': img,
-                'confounds': confounds,
-                'file_path': file_path
-            }
-            
+            if use_memory_efficient:
+                # Use memory-efficient loading
+                fmri_data = self.memory_loader.load_fmri_memmap(worker_id)
+                
+                # Handle different return types
+                if hasattr(fmri_data, 'array'):
+                    # Memory-mapped array - create compatible interface
+                    img = None  # We'll handle this differently
+                    data_source = 'memmap'
+                else:
+                    # Regular array - wrap in nibabel-like interface
+                    import nibabel as nib
+                    img = nib.Nifti1Image(fmri_data, affine=np.eye(4))
+                    data_source = 'memory'
+                
+                # Load confounds normally
+                confounds_df = load_confounds(worker_id, self.config)
+                confounds = None
+                if confounds_df is not None:
+                    confounds = confounds_df.values
+                
+                return {
+                    'success': True,
+                    'img': img,
+                    'fmri_data': fmri_data,  # Raw data for memory-efficient processing
+                    'confounds': confounds,
+                    'data_source': data_source,
+                    'memory_efficient': True,
+                    'file_path': getattr(fmri_data, 'metadata', {}).get('source', 'unknown')
+                }
+            else:
+                # Use standard loading (existing behavior)
+                img = load_fmri_data(worker_id, self.config, smoothed=False, validate=True)
+                confounds_df = load_confounds(worker_id, self.config)
+                
+                # Convert confounds to array if available
+                confounds = None
+                if confounds_df is not None:
+                    confounds = confounds_df.values
+                
+                # Get file path for compatibility
+                file_path = img.get_filename()
+                
+                return {
+                    'success': True,
+                    'img': img,
+                    'fmri_data': None,  # Not used in standard loading
+                    'confounds': confounds,
+                    'data_source': 'standard',
+                    'memory_efficient': False,
+                    'file_path': file_path
+                }
+                
         except DataError as e:
             return {'success': False, 'error': f'Data error: {str(e)}'}
         except Exception as e:
@@ -513,6 +565,69 @@ class MVPAAnalysis:
             cv_strategy='kfold',
             n_permutations=self.config.N_PERMUTATIONS
         )
+
+    def extract_trial_data_memory_efficient(self, fmri_data, events_df, roi_name, confounds=None):
+        """
+        Extract trial-wise neural data from memory-mapped fMRI data
+        
+        Parameters:
+        -----------
+        fmri_data : MemoryMappedArray
+            Memory-mapped fMRI data
+        events_df : DataFrame
+            Trial events with onsets
+        roi_name : str
+            Name of ROI to extract from
+        confounds : array-like, optional
+            Confound regressors
+            
+        Returns:
+        --------
+        array : Trial-wise neural data (n_trials x n_voxels)
+        """
+        if roi_name not in self.maskers:
+            raise ValueError(f"Masker for {roi_name} not found")
+        
+        masker = self.maskers[roi_name]
+        
+        # Get trial onsets
+        onsets = events_df['onset'].values
+        tr = self.config.TR
+        hemi_lag = self.config.HEMI_LAG
+        
+        # Convert onsets to TRs
+        onset_trs = (onsets / tr + hemi_lag).astype(int)
+        
+        # Load and apply mask
+        if hasattr(masker, 'mask_img_'):
+            mask = masker.mask_img_.get_fdata().astype(bool)
+        else:
+            # Fit masker if not already fitted
+            import nibabel as nib
+            temp_img = nib.Nifti1Image(fmri_data.array[..., 0], affine=np.eye(4))
+            masker.fit(temp_img)
+            mask = masker.mask_img_.get_fdata().astype(bool)
+        
+        # Extract ROI voxels for each trial
+        roi_indices = np.where(mask.flatten())[0]
+        n_voxels = len(roi_indices)
+        n_trials = len(onset_trs)
+        
+        # Memory-efficient trial extraction
+        X = np.zeros((n_trials, n_voxels), dtype=fmri_data.dtype)
+        
+        for i, tr in enumerate(onset_trs):
+            if tr < fmri_data.shape[3]:  # Check bounds
+                volume = fmri_data.array[..., tr].flatten()
+                X[i, :] = volume[roi_indices]
+        
+        # Apply standardization if the masker would do it
+        if hasattr(masker, 'standardize') and masker.standardize:
+            from sklearn.preprocessing import StandardScaler
+            scaler = StandardScaler()
+            X = scaler.fit_transform(X)
+        
+        return X
 
 class GeometryAnalysis:
     """Class for neural geometry analysis"""
@@ -1233,8 +1348,8 @@ def setup_directories(config):
                      config.MVPA_OUTPUT, config.GEOMETRY_OUTPUT]:
         Path(directory).mkdir(parents=True, exist_ok=True)
 
-def main():
-    """Main analysis pipeline"""
+def main(enable_memory_efficient=False, memory_config=None):
+    """Main analysis pipeline with optional memory efficiency"""
     print("Starting Delay Discounting MVPA Analysis Pipeline")
     print("=" * 60)
     
@@ -1242,9 +1357,18 @@ def main():
     config = Config()
     setup_directories(config)
     
+    # Log memory efficiency status
+    if enable_memory_efficient:
+        print("🚀 Memory-efficient data loading: ENABLED")
+        if memory_config is None:
+            memory_config = MemoryConfig()
+            print(f"   Memory threshold: {memory_config.MEMMAP_THRESHOLD_GB} GB")
+    else:
+        print("📊 Standard data loading: ENABLED")
+    
     # Initialize analysis classes
     behavioral_analysis = BehavioralAnalysis(config)
-    fmri_preprocessing = fMRIPreprocessing(config)
+    fmri_preprocessing = fMRIPreprocessing(config, enable_memory_efficient, memory_config)
     mvpa_analysis = MVPAAnalysis(config)
     geometry_analysis = GeometryAnalysis(config)
     
@@ -1261,8 +1385,8 @@ def main():
     
     print(f"Analysis will be performed on {len(mvpa_analysis.maskers)} ROIs")
     
-    # Get list of subjects (you'll need to implement this based on your data structure)
-    subjects = get_subject_list(config)  # This function needs to be implemented
+    # Get list of subjects
+    subjects = get_subject_list(config)
     print(f"Found {len(subjects)} subjects")
     
     # Process each subject
@@ -1287,12 +1411,26 @@ def main():
             print(f"    Failed: {fmri_result['error']}")
             continue
         
+        # Log memory efficiency status
+        if fmri_result['memory_efficient']:
+            print(f"    ✓ Using memory-efficient loading ({fmri_result['data_source']})")
+        
         # 3. MVPA analysis
         print("  - Running MVPA analysis...")
         mvpa_results = {}
         
         behavioral_data = behavior_result['data']
-        img = fmri_result['img']
+        
+        # Handle different data sources
+        if fmri_result['memory_efficient'] and fmri_result['data_source'] == 'memmap':
+            # Memory-mapped data - use special extraction
+            img = None
+            fmri_data = fmri_result['fmri_data']
+        else:
+            # Standard data
+            img = fmri_result['img']
+            fmri_data = None
+        
         confounds = fmri_result['confounds']
         
         for roi_name in mvpa_analysis.maskers.keys():
@@ -1300,15 +1438,16 @@ def main():
             
             # Extract trial-wise data
             try:
-                # Option 1: Standard single timepoint extraction
-                X = mvpa_analysis.extract_trial_data(img, behavioral_data, roi_name, confounds)
-                
-                # Option 2: Advanced pattern extraction (uncomment to use)
-                # pattern_results = mvpa_analysis.extract_trial_patterns(
-                #     img, behavioral_data, roi_name, confounds, 
-                #     pattern_type='average_window', window_size=3
-                # )
-                # X = pattern_results['patterns']
+                if fmri_data is not None:
+                    # Memory-efficient extraction
+                    X = mvpa_analysis.extract_trial_data_memory_efficient(
+                        fmri_data, behavioral_data, roi_name, confounds
+                    )
+                else:
+                    # Standard extraction
+                    X = mvpa_analysis.extract_trial_data(
+                        img, behavioral_data, roi_name, confounds
+                    )
                 
                 # Decode choices
                 choice_result = mvpa_analysis.decode_choices(
@@ -1598,23 +1737,28 @@ def main():
     print("Analysis complete!")
 
 def get_subject_list(config):
-    """
-    Get list of subjects with both behavioral and fMRI data (REFACTORED to use data_utils)
-    
-    Parameters:
-    -----------
-    config : Config
-        Configuration object
+    """Get list of available subjects"""
+    try:
+        from data_utils import get_complete_subjects
+        subjects = get_complete_subjects(config)
+        return subjects
+    except Exception as e:
+        print(f"Warning: Could not get subject list: {e}")
+        print("Using fallback method...")
         
-    Returns:
-    --------
-    list : Subject IDs
-    """
-    # Use centralized subject discovery (NEW!)
-    subjects = get_complete_subjects(config)
-    print(f"Found {len(subjects)} subjects with complete data using data_utils")
-    
-    return subjects
+        # Fallback: scan directories
+        import os
+        from pathlib import Path
+        
+        subjects = []
+        fmri_dir = Path(config.FMRIPREP_DIR)
+        
+        if fmri_dir.exists():
+            for subject_dir in fmri_dir.iterdir():
+                if subject_dir.is_dir() and subject_dir.name.startswith('sub-'):
+                    subjects.append(subject_dir.name)
+        
+        return sorted(subjects)
 
 if __name__ == "__main__":
     main() 
