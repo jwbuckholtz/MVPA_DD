@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Analyze and Visualize Results from Delay Discounting MVPA Pipeline (REFACTORED to use data_utils)
+Analyze and Visualize Results from Delay Discounting MVPA Pipeline (REFACTORED to use logger_utils)
 
 This script processes the results from the main analysis pipeline and creates
 comprehensive visualizations and statistical summaries.
@@ -8,6 +8,13 @@ comprehensive visualizations and statistical summaries.
 Author: Cognitive Neuroscience Lab, Stanford University
 """
 
+# Import logger utilities FIRST for standardized setup
+from logger_utils import (
+    setup_pipeline_environment, create_analysis_parser, 
+    log_analysis_results, setup_script_logging
+)
+
+# Core imports (managed by logger_utils)
 import os
 import pickle
 import numpy as np
@@ -18,7 +25,6 @@ from pathlib import Path
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
 import warnings
-warnings.filterwarnings('ignore')
 
 # Data utilities (NEW!)
 from data_utils import (
@@ -412,60 +418,95 @@ def check_pipeline_data_integrity():
     return integrity_report
 
 def main():
-    """Main function (ENHANCED with data_utils options)"""
-    import argparse
+    """Main function (ENHANCED with logger_utils integration)"""
     
-    parser = argparse.ArgumentParser(description='Analyze MVPA results or check data integrity')
-    parser.add_argument('--results_file', 
-                       help='Path to results pickle file (default: look for standard location)')
-    parser.add_argument('--output_dir', default='./analysis_outputs', 
-                       help='Output directory for plots')
-    parser.add_argument('--check_data', action='store_true',
-                       help='Check data integrity for all subjects')
+    # Create standardized argument parser
+    parser = create_analysis_parser(
+        script_name='analyze_results',
+        analysis_type='behavioral',  # closest match for results analysis
+        require_data=False  # results file is optional
+    )
     
+    # Add script-specific arguments
+    parser.parser.add_argument('--check-data', action='store_true',
+                              help='Check data integrity for all subjects')
+    
+    # Parse arguments
     args = parser.parse_args()
     
-    if args.check_data:
-        # Run data integrity check (NEW!)
-        check_pipeline_data_integrity()
-        return
+    # Setup complete environment
+    env = setup_pipeline_environment(
+        script_name='analyze_results',
+        args=args,
+        required_modules=['numpy', 'pandas', 'matplotlib', 'seaborn', 'scipy']
+    )
     
-    # Look for results file
-    if args.results_file:
-        results_file = args.results_file
-    else:
-        # Try standard locations
-        config = OAKConfig()
-        possible_locations = [
-            f"{config.OUTPUT_DIR}/all_results.pkl",
-            "./delay_discounting_results/all_results.pkl",
-            "./all_results.pkl"
-        ]
+    # Extract environment components
+    logger = env['logger']
+    config = env['config']
+    
+    try:
+        if args.check_data:
+            # Run data integrity check (NEW!)
+            logger.logger.info("Running data integrity check...")
+            check_pipeline_data_integrity()
+            logger.log_pipeline_end('analyze_results', success=True)
+            return
         
-        results_file = None
-        for location in possible_locations:
-            if os.path.exists(location):
-                results_file = location
-                break
-    
-    if not results_file or not os.path.exists(results_file):
-        print(f"Results file not found!")
-        print("Tried locations:")
-        for location in possible_locations:
-            print(f"  - {location}")
-        print("\nPlease run the main analysis pipeline first or specify --results_file")
-        print("Or use --check_data to check data integrity")
-        return
-    
-    print(f"Using results file: {results_file}")
-    
-    # Create analyzer
-    analyzer = ResultsAnalyzer(results_file)
-    analyzer.output_dir = Path(args.output_dir)
-    analyzer.output_dir.mkdir(exist_ok=True)
-    
-    # Run analysis
-    analyzer.run_analysis()
+        # Look for results file
+        if args.results_file:
+            results_file = args.results_file
+        else:
+            # Try standard locations
+            possible_locations = [
+                f"{config.OUTPUT_DIR}/all_results.pkl",
+                "./delay_discounting_results/all_results.pkl",
+                "./all_results.pkl"
+            ]
+            
+            results_file = None
+            for location in possible_locations:
+                if os.path.exists(location):
+                    results_file = location
+                    break
+        
+        if not results_file or not os.path.exists(results_file):
+            logger.logger.error("Results file not found!")
+            logger.logger.info("Tried locations:")
+            for location in possible_locations:
+                logger.logger.info(f"  - {location}")
+            logger.logger.info("\nPlease run the main analysis pipeline first or specify --results-file")
+            logger.logger.info("Or use --check-data to check data integrity")
+            logger.log_pipeline_end('analyze_results', success=False)
+            return
+        
+        logger.logger.info(f"Using results file: {results_file}")
+        
+        # Create analyzer
+        analyzer = ResultsAnalyzer(results_file)
+        analyzer.output_dir = Path(args.output_dir)
+        analyzer.output_dir.mkdir(exist_ok=True)
+        
+        # Log analysis start
+        logger.logger.info(f"Output directory: {analyzer.output_dir}")
+        
+        # Run analysis with progress tracking
+        analyzer.run_analysis()
+        
+        # Log success
+        analysis_results = {
+            'success': True,
+            'output_dir': str(analyzer.output_dir),
+            'results_file': results_file
+        }
+        
+        log_analysis_results(logger, analysis_results, 'results_analysis')
+        logger.log_pipeline_end('analyze_results', success=True)
+        
+    except Exception as e:
+        logger.log_error_with_traceback(e, 'main analysis')
+        logger.log_pipeline_end('analyze_results', success=False)
+        raise
 
 if __name__ == "__main__":
     main() 
