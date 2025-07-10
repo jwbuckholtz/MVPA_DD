@@ -41,6 +41,12 @@ from logger_utils import PipelineLogger
 # Configuration
 from oak_storage_config import OAKConfig
 
+# Add memory-efficient data loading integration to existing imports
+from memory_efficient_data import (
+    MemoryEfficientLoader, MemoryConfig, MemoryEfficientContext,
+    create_memory_efficient_loader
+)
+
 
 class CacheConfig:
     """Configuration for caching system"""
@@ -336,13 +342,18 @@ class CacheManager:
 
 
 class CachedMVPAProcessor:
-    """MVPA processor with comprehensive caching"""
+    """MVPA processor with comprehensive caching and memory efficiency"""
     
-    def __init__(self, config: OAKConfig, cache_config: CacheConfig = None):
+    def __init__(self, config: OAKConfig, cache_config: CacheConfig = None, 
+                 memory_config: MemoryConfig = None):
         self.config = config
         self.cache_config = cache_config or CacheConfig()
+        self.memory_config = memory_config or MemoryConfig()
         self.cache_manager = CacheManager(config=self.cache_config)
         self.logger = PipelineLogger('cached_mvpa').logger
+        
+        # Initialize memory-efficient loader
+        self.memory_loader = create_memory_efficient_loader(config, self.memory_config)
         
         # Setup cached functions
         self._setup_cached_functions()
@@ -391,37 +402,37 @@ class CachedMVPAProcessor:
     def _beta_extraction_impl(self, subject_id: str, roi_name: str, 
                              img_hash: str, behavioral_hash: str, 
                              confounds_hash: str, config_hash: str) -> Dict[str, Any]:
-        """Implementation of beta extraction (for caching)"""
+        """Implementation of beta extraction with memory-efficient loading"""
         from delay_discounting_mvpa_pipeline import fMRIPreprocessing, MVPAAnalysis
         from data_utils import load_behavioral_data
-        
-        # Load data
-        fmri_preprocessing = fMRIPreprocessing(self.config)
-        mvpa_analysis = MVPAAnalysis(self.config)
-        
-        # Load fMRI data
-        fmri_result = fmri_preprocessing.load_subject_fmri(subject_id)
-        if not fmri_result['success']:
-            return fmri_result
         
         # Load behavioral data
         behavioral_data = load_behavioral_data(subject_id, self.config, 
                                              validate=True, compute_sv=True)
         
-        # Create maskers and extract data
-        mvpa_analysis.create_roi_maskers()
-        img = fmri_result['img']
-        confounds = fmri_result['confounds']
+        # Use memory-efficient fMRI loading
+        fmri_data = self.memory_loader.load_fmri_memmap(subject_id)
         
-        # Extract trial-wise data
-        X = mvpa_analysis.extract_trial_data(img, behavioral_data, roi_name, confounds)
+        # Create maskers and extract data
+        mvpa_analysis = MVPAAnalysis(self.config)
+        mvpa_analysis.create_roi_maskers()
+        
+        # Extract trial-wise data with memory efficiency
+        if roi_name in mvpa_analysis.maskers:
+            masker = mvpa_analysis.maskers[roi_name]
+            
+            # Memory-efficient trial extraction
+            X = self._extract_trial_data_memmap(fmri_data, behavioral_data, masker)
+        else:
+            return {'success': False, 'error': f'ROI {roi_name} not found'}
         
         return {
             'success': True,
             'neural_data': X,
             'behavioral_data': behavioral_data,
             'n_trials': X.shape[0],
-            'n_voxels': X.shape[1]
+            'n_voxels': X.shape[1],
+            'memory_mapped': isinstance(fmri_data, self.memory_loader.__class__.__dict__.get('MemoryMappedArray', type(None)))
         }
     
     def _mvpa_decoding_impl(self, neural_hash: str, behavioral_hash: str,
@@ -582,10 +593,97 @@ class CachedMVPAProcessor:
         
         return result
 
+    def _extract_trial_data_memmap(self, fmri_data, behavioral_data, masker):
+        """Extract trial-wise data from memory-mapped fMRI data"""
+        from memory_efficient_data import MemoryMappedArray
+        
+        if isinstance(fmri_data, MemoryMappedArray):
+            # Memory-efficient extraction for memory-mapped data
+            return self._extract_from_memmap(fmri_data, behavioral_data, masker)
+        else:
+            # Standard extraction for regular arrays
+            return self._extract_from_array(fmri_data, behavioral_data, masker)
+    
+    def _extract_from_memmap(self, memmap_data, behavioral_data, masker):
+        """Extract trial data from memory-mapped fMRI data"""
+        # Get trial onsets
+        onsets = behavioral_data['onset'].values
+        tr = self.config.TR
+        hemi_lag = self.config.HEMI_LAG
+        
+        # Convert onsets to TRs
+        onset_trs = (onsets / tr + hemi_lag).astype(int)
+        
+        # Load and apply mask
+        if hasattr(masker, 'mask_img_'):
+            mask = masker.mask_img_.get_fdata().astype(bool)
+        else:
+            # Fit masker if not already fitted
+            temp_img = nib.Nifti1Image(memmap_data.array[..., 0], affine=np.eye(4))
+            masker.fit(temp_img)
+            mask = masker.mask_img_.get_fdata().astype(bool)
+        
+        # Extract ROI voxels for each trial
+        roi_indices = np.where(mask.flatten())[0]
+        n_voxels = len(roi_indices)
+        n_trials = len(onset_trs)
+        
+        # Memory-efficient trial extraction
+        X = np.zeros((n_trials, n_voxels), dtype=memmap_data.dtype)
+        
+        for i, tr in enumerate(onset_trs):
+            if tr < memmap_data.shape[3]:  # Check bounds
+                volume = memmap_data.array[..., tr].flatten()
+                X[i, :] = volume[roi_indices]
+        
+        return X
+    
+    def _extract_from_array(self, fmri_data, behavioral_data, masker):
+        """Extract trial data from regular array (fallback)"""
+        # Standard nilearn-based extraction
+        img = nib.Nifti1Image(fmri_data, affine=np.eye(4))
+        
+        # Use existing extraction method
+        from mvpa_utils import extract_neural_patterns
+        
+        result = extract_neural_patterns(
+            img, behavioral_data, masker,
+            pattern_type='single_timepoint',
+            tr=self.config.TR,
+            hemi_lag=self.config.HEMI_LAG
+        )
+        
+        if result['success']:
+            return result['patterns']
+        else:
+            raise Exception(f"Pattern extraction failed: {result['error']}")
+    
+    def get_memory_usage_report(self) -> Dict[str, Any]:
+        """Get comprehensive memory usage report"""
+        cache_stats = self.cache_manager.get_stats()
+        memory_report = self.memory_loader.get_memory_usage_report()
+        
+        return {
+            'cache_stats': cache_stats,
+            'memory_stats': memory_report,
+            'combined_efficiency': {
+                'cache_hit_rate': cache_stats.get('hit_rate', 0),
+                'memory_mapped_files': memory_report.get('active_memmaps', 0),
+                'total_memmap_size_gb': memory_report.get('memmap_usage_gb', 0),
+                'system_memory_usage': memory_report.get('system_memory', {})
+            }
+        }
+    
+    def cleanup(self):
+        """Cleanup cache and memory-mapped files"""
+        self.cache_manager.clear_cache()
+        self.memory_loader.cleanup()
+
 
 def create_cached_processor(config: OAKConfig = None, 
-                          cache_config: CacheConfig = None) -> CachedMVPAProcessor:
-    """Create cached MVPA processor with default configuration"""
+                          cache_config: CacheConfig = None,
+                          memory_config: MemoryConfig = None) -> CachedMVPAProcessor:
+    """Create cached MVPA processor with memory efficiency"""
     if config is None:
         config = OAKConfig()
     
@@ -595,7 +693,12 @@ def create_cached_processor(config: OAKConfig = None,
         cache_config.CACHE_DIR = str(Path(config.OUTPUT_DIR) / 'cache')
         cache_config.STATS_FILE = str(Path(config.OUTPUT_DIR) / 'cache_stats.json')
     
-    return CachedMVPAProcessor(config, cache_config)
+    if memory_config is None:
+        memory_config = MemoryConfig()
+        # Set memory map temp directory relative to output directory
+        memory_config.MEMMAP_TEMP_DIR = str(Path(config.OUTPUT_DIR) / 'memmap_temp')
+    
+    return CachedMVPAProcessor(config, cache_config, memory_config)
 
 
 def cache_info() -> Dict[str, Any]:
