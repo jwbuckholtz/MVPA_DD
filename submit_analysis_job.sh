@@ -237,40 +237,69 @@ if [ $? -ne 0 ]; then
 fi
 
 # Step 2: Run main MVPA analysis (with OAK configuration)
-echo "Step 2: Running main MVPA analysis with OAK storage..."
+echo "Step 2: Running enhanced parallel MVPA analysis with OAK storage..."
 python -c "
 import sys
+import os
 sys.path.append('.')
 
 # Import components
-from delay_discounting_mvpa_pipeline import main, setup_directories
+from delay_discounting_mvpa_pipeline_parallel import main, EnhancedMVPAPipeline
+from parallel_mvpa_utils import ParallelMVPAConfig, optimize_parallel_config
 from oak_storage_config import OAKConfig
+from data_utils import get_complete_subjects
 
 # Use OAK configuration
 config = OAKConfig()
 print(f'Using OAK output directory: {config.OUTPUT_DIR}')
 
-# Set up directories
-setup_directories(config)
+# Get subjects to process
+subjects = get_complete_subjects(config)
+print(f'Processing {len(subjects)} subjects')
 
-# Replace the Config class in the main module
-import delay_discounting_mvpa_pipeline
-delay_discounting_mvpa_pipeline.Config = OAKConfig
+# Create optimized parallel configuration for SLURM environment
+parallel_config = ParallelMVPAConfig()
+parallel_config.N_JOBS_SUBJECTS = min(4, int(os.environ.get('SLURM_CPUS_PER_TASK', '16')) // 4)
+parallel_config.N_JOBS_ROIS = min(3, len(config.ROI_MASKS))
+parallel_config.N_JOBS_MVPA = 1  # Conservative for memory
+parallel_config.BACKEND = 'loky'  # Best for SLURM
+parallel_config.CHUNK_SIZE = 10   # Smaller chunks for SLURM
 
-# Run main analysis
-print('Starting main analysis pipeline...')
-main()
-print('Main analysis completed successfully')
+print(f'Parallel configuration:')
+print(f'  - Subject jobs: {parallel_config.N_JOBS_SUBJECTS}')
+print(f'  - ROI jobs: {parallel_config.N_JOBS_ROIS}')
+print(f'  - MVPA jobs: {parallel_config.N_JOBS_MVPA}')
+print(f'  - Backend: {parallel_config.BACKEND}')
+print(f'  - Chunk size: {parallel_config.CHUNK_SIZE}')
+
+# Create enhanced pipeline
+pipeline = EnhancedMVPAPipeline(
+    config=config,
+    parallel_config=parallel_config,
+    enable_geometry=True
+)
+
+# Run parallel analysis
+print('Starting enhanced parallel analysis pipeline...')
+results = pipeline.run_parallel_analysis(subjects)
+
+if results['success']:
+    print(f'\\nEnhanced parallel analysis completed successfully!')
+    print(f'Processed {results[\"subjects_processed\"]} subjects in {results[\"total_time\"]:.2f} seconds')
+else:
+    print(f'ERROR: Enhanced parallel analysis failed: {results[\"error\"]}')
+    sys.exit(1)
 "
 
-# Check if main analysis completed successfully
-if [ ! -f "${RESULTS_DIR}/all_results.pkl" ]; then
-    echo "Error: Main analysis did not complete successfully - results file not found"
+# Check if parallel analysis completed successfully
+if [ ! -f "${RESULTS_DIR}/all_results_parallel.pkl" ]; then
+    echo "Error: Parallel analysis did not complete successfully - results file not found"
     exit 1
 fi
 
-echo "Main analysis completed successfully"
-echo "Results file size: $(ls -lh ${RESULTS_DIR}/all_results.pkl)"
+echo "Parallel analysis completed successfully"
+echo "Results file size: $(ls -lh ${RESULTS_DIR}/all_results_parallel.pkl)"
+echo "Processing stats file size: $(ls -lh ${RESULTS_DIR}/processing_stats_parallel.pkl)"
 
 # ENHANCED: Step 3: Analyze and visualize results using data_utils
 echo "Step 3: Analyzing and visualizing results with data_utils integration..."
@@ -284,7 +313,7 @@ from oak_storage_config import OAKConfig
 import os
 
 config = OAKConfig()
-results_file = f'{config.OUTPUT_DIR}/all_results.pkl'
+results_file = f'{config.OUTPUT_DIR}/all_results_parallel.pkl'
 
 print(f'Analyzing results from: {results_file}')
 
@@ -379,7 +408,7 @@ from pathlib import Path
 from delay_discounting_geometry_analysis import DelayDiscountingGeometryAnalyzer
 
 # Load main results to extract neural data and behavioral data
-results_file = '${RESULTS_DIR}/all_results.pkl'
+results_file = '${RESULTS_DIR}/all_results_parallel.pkl'
 config_file = '${GEOMETRY_CONFIG}'
 
 print(f'Loading results from: {results_file}')
