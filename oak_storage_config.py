@@ -29,16 +29,29 @@ class OAKConfig:
     # OUTPUT_DIR = f"{USER_OAK_DIR}/delay_discounting_mvpa_results"
     
     # Analysis parameters (same as original)
-    TR = 1.0  # Repetition time in seconds
-    HEMI_LAG = 4  # Hemodynamic lag in TRs
+    TR = .68  # Repetition time in seconds
+    HEMI_LAG = 0  # Hemodynamic lag in TRs
     
-    # ROI masks (should also be on OAK or accessible path)
-    MASKS_DIR = f"{DATA_ROOT}/derivatives/masks"  # Store masks on OAK too
+    # ROI masks - PRE-EXISTING masks stored on OAK
+    MASKS_DIR = f"{DATA_ROOT}/derivatives/masks"  # Pre-existing masks on OAK
     ROI_MASKS = {
         'striatum': f'{MASKS_DIR}/striatum_mask.nii.gz',
         'dlpfc': f'{MASKS_DIR}/dlpfc_mask.nii.gz',
-        'vmpfc': f'{MASKS_DIR}/vmpfc_mask.nii.gz'
+        'vmpfc': f'{MASKS_DIR}/vmpfc_mask.nii.gz',
+        # Add additional pre-existing masks as available
+        'left_striatum': f'{MASKS_DIR}/left_striatum_mask.nii.gz',
+        'right_striatum': f'{MASKS_DIR}/right_striatum_mask.nii.gz',
+        'left_dlpfc': f'{MASKS_DIR}/left_dlpfc_mask.nii.gz',
+        'right_dlpfc': f'{MASKS_DIR}/right_dlpfc_mask.nii.gz',
+        'acc': f'{MASKS_DIR}/acc_mask.nii.gz',  # Anterior Cingulate Cortex
+        'ofc': f'{MASKS_DIR}/ofc_mask.nii.gz',  # Orbitofrontal Cortex
     }
+    
+    # Core ROI masks (required for analysis)
+    CORE_ROI_MASKS = ['striatum', 'dlpfc', 'vmpfc']
+    
+    # Optional ROI masks (used if available)
+    OPTIONAL_ROI_MASKS = ['left_striatum', 'right_striatum', 'left_dlpfc', 'right_dlpfc', 'acc', 'ofc']
     
     # MVPA parameters
     N_JOBS = -1  # Use all available cores

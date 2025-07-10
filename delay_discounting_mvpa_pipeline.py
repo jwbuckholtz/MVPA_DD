@@ -322,19 +322,44 @@ class MVPAAnalysis:
         
     def create_roi_maskers(self):
         """Create NiftiMasker objects for each ROI"""
+        from data_utils import check_mask_exists, load_mask
+        
+        print("Creating ROI maskers...")
+        available_rois = []
+        
         for roi_name, mask_path in self.config.ROI_MASKS.items():
-            if os.path.exists(mask_path):
-                self.maskers[roi_name] = NiftiMasker(
-                    mask_img=mask_path,
-                    standardize=True,
-                    detrend=True,
-                    high_pass=0.01,
-                    t_r=self.config.TR,
-                    memory='nilearn_cache',
-                    memory_level=1
-                )
+            if check_mask_exists(mask_path):
+                try:
+                    # Validate mask before using
+                    mask_img = load_mask(mask_path, validate=True)
+                    
+                    self.maskers[roi_name] = NiftiMasker(
+                        mask_img=mask_path,
+                        standardize=True,
+                        detrend=True,
+                        high_pass=0.01,
+                        t_r=self.config.TR,
+                        memory='nilearn_cache',
+                        memory_level=1
+                    )
+                    
+                    available_rois.append(roi_name)
+                    print(f"✓ Created masker for {roi_name}")
+                    
+                except Exception as e:
+                    print(f"✗ Failed to create masker for {roi_name}: {e}")
             else:
-                print(f"Warning: ROI mask not found: {mask_path}")
+                print(f"✗ ROI mask not found: {roi_name} ({mask_path})")
+        
+        print(f"Created maskers for {len(available_rois)} ROIs: {', '.join(available_rois)}")
+        
+        # Ensure we have at least core ROIs available
+        if hasattr(self.config, 'CORE_ROI_MASKS'):
+            missing_core = [roi for roi in self.config.CORE_ROI_MASKS if roi not in available_rois]
+            if missing_core:
+                raise ValueError(f"Missing required core ROI masks: {missing_core}")
+        
+        return available_rois
     
     def create_whole_brain_masker(self):
         """Create whole-brain masker"""

@@ -571,7 +571,7 @@ def load_confounds(subject_id: str, config: Optional[OAKConfig] = None,
         logger.error(f"Failed to load confounds for {subject_id}: {str(e)}")
         return None
 
-def check_mask_exists(mask_path: str, create_if_missing: bool = False) -> bool:
+def check_mask_exists(mask_path: str) -> bool:
     """
     Check if mask file exists
     
@@ -579,27 +579,17 @@ def check_mask_exists(mask_path: str, create_if_missing: bool = False) -> bool:
     -----------
     mask_path : str
         Path to mask file
-    create_if_missing : bool
-        Whether to attempt creation if missing
         
     Returns:
     --------
     bool : True if mask exists
+    
+    Note:
+    -----
+    This function has been simplified to only check existence.
+    Mask creation is no longer supported - use pre-existing masks on OAK.
     """
-    if Path(mask_path).exists():
-        return True
-    
-    if create_if_missing:
-        logger.info(f"Attempting to create missing mask: {mask_path}")
-        try:
-            from create_roi_masks import create_all_masks
-            create_all_masks()
-            return Path(mask_path).exists()
-        except Exception as e:
-            logger.error(f"Failed to create mask {mask_path}: {str(e)}")
-            return False
-    
-    return False
+    return Path(mask_path).exists()
 
 def load_mask(mask_path: str, validate: bool = True) -> nib.Nifti1Image:
     """

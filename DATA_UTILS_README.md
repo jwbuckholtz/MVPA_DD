@@ -230,7 +230,7 @@ The following scripts have been updated to use `data_utils`:
 
 1. **`delay_discounting_mvpa_pipeline.py`** - Main MVPA pipeline
 2. **`analyze_results.py`** - Results analysis  
-3. **`create_roi_masks.py`** - ROI mask creation
+3. **`validate_roi_masks.py`** - ROI mask validation
 
 ### Usage Examples
 
@@ -499,7 +499,7 @@ save_processed_data(results, 'batch_results.pkl')
 
 ### Common Issues
 
-1. **Missing Masks**: Run `python create_roi_masks.py`
+1. **Missing Masks**: Ensure masks are available on OAK - run `python validate_roi_masks.py`
 2. **Path Issues**: Check `oak_storage_config.py` paths
 3. **Permission Errors**: Ensure read access to data directories
 4. **Memory Issues**: Use `smoothed=False` and process subjects individually

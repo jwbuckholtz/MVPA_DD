@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """
-Create ROI masks for MVPA analysis (REFACTORED to use data_utils)
+[DEPRECATED] Create ROI masks for MVPA analysis (REFACTORED to use data_utils)
+
+⚠️  DEPRECATION NOTICE:
+This script is DEPRECATED as of the OAK migration. The pipeline now uses
+pre-existing masks stored on OAK. Please use validate_roi_masks.py instead.
+
 This script creates anatomical ROI masks for:
 - Striatum (caudate, putamen, nucleus accumbens)
 - DLPFC (Brodmann areas 9, 46)  
@@ -8,6 +13,14 @@ This script creates anatomical ROI masks for:
 
 Author: Cognitive Neuroscience Lab, Stanford University
 """
+
+import warnings
+warnings.warn(
+    "create_roi_masks.py is DEPRECATED. The pipeline now uses pre-existing masks "
+    "stored on OAK. Please use validate_roi_masks.py to check mask availability.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 import os
 import numpy as np

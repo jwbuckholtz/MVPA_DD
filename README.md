@@ -79,9 +79,10 @@ The pipeline fits hyperbolic discounting models to choice data:
 ### Core Scripts
 
 - `delay_discounting_mvpa_pipeline.py` - Main analysis pipeline
-- `create_roi_masks.py` - Generate anatomical ROI masks
+- `validate_roi_masks.py` - Validate pre-existing anatomical ROI masks on OAK
 - `analyze_results.py` - Results visualization and statistics
 - `submit_analysis_job.sh` - SLURM job submission script
+- `demo_mask_validation.py` - Demo script for mask validation functionality
 
 ### Geometry Analysis Scripts
 
@@ -102,6 +103,7 @@ The pipeline fits hyperbolic discounting models to choice data:
 
 - `requirements.txt` - Python package dependencies
 - `Dataset_Descriptor_Files/` - Data descriptors and quality control
+- `MASK_VALIDATION_README.md` - Comprehensive guide for ROI mask validation
 
 ### Documentation
 
@@ -124,16 +126,16 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Create ROI Masks
+### 2. Validate ROI Masks
 
 ```bash
-python create_roi_masks.py
+python validate_roi_masks.py
 ```
 
-This creates anatomical masks in `./masks/`:
-- `striatum_mask.nii.gz`
-- `dlpfc_mask.nii.gz` 
-- `vmpfc_mask.nii.gz`
+This validates pre-existing anatomical masks stored on OAK:
+- Core masks: `striatum_mask.nii.gz`, `dlpfc_mask.nii.gz`, `vmpfc_mask.nii.gz`
+- Optional masks: Hemispheric ROIs, ACC, OFC
+- Creates visualization and detailed validation report
 
 ### 3. Run Analysis
 
@@ -399,6 +401,19 @@ For questions or issues:
 2. Verify data paths and permissions
 3. Ensure all dependencies are installed
 4. Contact: Cognitive Neuroscience Lab, Stanford University
+
+## Documentation
+
+### Comprehensive Guides
+- `README.md` - This file with complete setup and usage instructions
+- `DATA_UTILS_README.md` - Comprehensive data utilities documentation
+- `LOGGER_UTILS_README.md` - Complete logger utilities documentation
+- `MASK_VALIDATION_README.md` - Comprehensive guide for ROI mask validation
+- `REFACTORING_SUMMARY.md` - Summary of OAK mask validation refactoring
+
+### Demo Scripts
+- `demo_logger_utils.py` - Demonstrates logger utilities functionality
+- `demo_mask_validation.py` - Demonstrates mask validation functionality
 
 ## License
 

@@ -192,13 +192,13 @@ fi
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 
-# ENHANCED: Step 1: Create/validate ROI masks using data_utils
-echo "Step 1: Creating/validating ROI masks on OAK using data_utils..."
+# UPDATED: Step 1: Validate pre-existing ROI masks on OAK
+echo "Step 1: Validating pre-existing ROI masks on OAK..."
 python -c "
 import sys
 sys.path.append('.')
 
-from create_roi_masks import main as create_masks_main
+from validate_roi_masks import MaskValidator, check_oak_connectivity
 from data_utils import check_mask_exists, load_mask
 from oak_storage_config import OAKConfig
 from pathlib import Path
@@ -206,37 +206,28 @@ from pathlib import Path
 config = OAKConfig()
 print(f'Masks directory: {config.MASKS_DIR}')
 
-# Use the enhanced create_roi_masks main function (already integrated with data_utils)
-print('Running mask creation/validation...')
-create_masks_main()
-
-# Validate all required masks using data_utils
-print('\\nValidating masks using data_utils...')
-all_masks_valid = True
-mask_info = []
-
-for roi_name, mask_path in config.ROI_MASKS.items():
-    exists = check_mask_exists(mask_path)
-    if exists:
-        try:
-            mask_img = load_mask(mask_path, validate=True)
-            n_voxels = (mask_img.get_fdata() > 0).sum()
-            mask_info.append(f'  ✓ {roi_name}: {n_voxels} voxels')
-        except Exception as e:
-            mask_info.append(f'  ✗ {roi_name}: Validation failed - {e}')
-            all_masks_valid = False
-    else:
-        mask_info.append(f'  ✗ {roi_name}: File not found')
-        all_masks_valid = False
-
-for info in mask_info:
-    print(info)
-
-if not all_masks_valid:
-    print('\\nERROR: Not all masks are valid!')
+# Check OAK connectivity first
+print('Checking OAK connectivity...')
+if not check_oak_connectivity():
+    print('\\nERROR: Cannot access OAK storage!')
     sys.exit(1)
 
-print('\\n✓ All ROI masks validated successfully!')
+# Use the new mask validator
+print('\\nRunning mask validation...')
+validator = MaskValidator(config)
+results_df = validator.validate_all_masks()
+
+# Check if core masks are valid
+if not validator.core_masks_valid:
+    print('\\nERROR: Not all core ROI masks are valid!')
+    print('Please ensure all required masks are available on OAK.')
+    sys.exit(1)
+
+print('\\n✓ All core ROI masks validated successfully!')
+
+# Print available ROIs
+available_rois = validator.get_available_rois()
+print(f'Available ROIs for analysis: {\\', \\'.join(available_rois)}')
 "
 
 # Check if mask validation passed
