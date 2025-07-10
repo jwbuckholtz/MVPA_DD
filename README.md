@@ -130,10 +130,12 @@ python delay_discounting_mvpa_pipeline.py
 
 #### HPC Cluster (SLURM)
 ```bash
-# Edit email address in submit script
-nano submit_analysis_job.sh
+# Mass Univariate Analysis (NEW)
+sbatch submit_mass_univariate.sh                    # All subjects
+sbatch --export=MODE=test submit_mass_univariate.sh # Test run
 
-# Submit job
+# Original MVPA Analysis
+nano submit_analysis_job.sh  # Edit email address
 sbatch submit_analysis_job.sh
 ```
 
@@ -143,7 +145,35 @@ sbatch submit_analysis_job.sh
 python analyze_results.py
 ```
 
-### 5. Neural Geometry Analysis (Optional)
+### 5. Mass Univariate Analysis (NEW)
+
+#### Run Whole-Brain GLM Analysis
+```bash
+# Test the module first
+python test_mass_univariate.py
+
+# Check available subjects
+python run_mass_univariate.py --check-only
+
+# Run test analysis (3 subjects)
+python run_mass_univariate.py --test
+
+# Run full analysis
+python run_mass_univariate.py
+
+# SLURM cluster submission
+sbatch submit_mass_univariate.sh
+```
+
+This module performs:
+- **Spatial smoothing** (4mm FWHM)
+- **5 GLM models**: Choice, SV chosen, SV unchosen, SV both, Choice difficulty
+- **Random effects** group analysis
+- **Multiple comparisons correction** (FDR + cluster)
+
+See `MASS_UNIVARIATE_README.md` and `SLURM_USAGE_GUIDE.md` for detailed documentation.
+
+### 6. Neural Geometry Analysis (Optional)
 
 #### Run Specialized Delay Discounting Geometry Analysis
 ```bash
@@ -295,3 +325,25 @@ For questions or issues:
 ## License
 
 This pipeline is provided for academic research use. Please respect the terms of use for the underlying dataset and software dependencies. 
+
+## Additional Notes
+
+### Monitoring Job Progress
+
+To monitor the progress of your job, you can use the `squeue` command to check the job queue and `tail` to follow the output:
+
+```bash
+squeue -u $USER
+tail -f /oak/stanford/groups/russpold/data/uh2/aim1/derivatives/mvpa_analysis/delay_discounting_results/mass_univariate/slurm_*.out
+```
+
+This will help you track the progress of your analysis and ensure that it completes successfully. 
+
+## New Output Files
+
+### Second-Level Analysis Results
+```bash
+ls /oak/stanford/groups/russpold/data/uh2/aim1/derivatives/mvpa_analysis/delay_discounting_results/mass_univariate/second_level/
+```
+
+This directory contains results from the second-level analysis, which includes the results of the GLM models for each subject. 

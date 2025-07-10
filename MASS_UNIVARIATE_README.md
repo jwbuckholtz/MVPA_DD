@@ -118,7 +118,7 @@ Your behavioral files should include:
 - **HRF model**: SPM canonical HRF
 - **Drift model**: Cosine basis functions
 - **High-pass filter**: 128 seconds (0.0078 Hz)
-- **Trial duration**: 4000ms from onset
+- **Trial duration**: 0ms from onset
 
 ### **Confounds Applied**
 - **Motion**: 6 rigid-body parameters + derivatives
