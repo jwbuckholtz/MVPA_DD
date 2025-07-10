@@ -108,21 +108,83 @@ print('Advanced geometry dependencies verified')
 echo "Verifying package installations..."
 python -c "import numpy, scipy, pandas, matplotlib, seaborn, sklearn, nibabel, nilearn; print('All packages imported successfully')"
 
-# Verify data access
-echo "Verifying OAK data access..."
-echo "fMRI data directory: ${OAK_DATA_ROOT}/derivatives/fmriprep"
-if [ -d "${OAK_DATA_ROOT}/derivatives/fmriprep" ]; then
-    echo "fMRI data accessible: $(ls ${OAK_DATA_ROOT}/derivatives/fmriprep | wc -l) subjects found"
-else
-    echo "ERROR: Cannot access fMRI data directory"
-    exit 1
-fi
+# ENHANCED: Comprehensive data verification using data_utils
+echo "Verifying OAK data access and integrity using data_utils..."
+python -c "
+import sys
+sys.path.append('.')
 
-echo "Behavioral data directory: ${OAK_DATA_ROOT}/behavioral_data/event_files"
-if [ -d "${OAK_DATA_ROOT}/behavioral_data/event_files" ]; then
-    echo "Behavioral data accessible: $(ls ${OAK_DATA_ROOT}/behavioral_data/event_files/*.tsv | wc -l) files found"
-else
-    echo "ERROR: Cannot access behavioral data directory"
+from data_utils import (
+    get_complete_subjects, check_data_integrity, 
+    SubjectManager, DataError
+)
+from oak_storage_config import OAKConfig
+import pandas as pd
+
+print('=' * 60)
+print('COMPREHENSIVE DATA VALIDATION')
+print('=' * 60)
+
+try:
+    config = OAKConfig()
+    
+    # Check directory access
+    print(f'fMRI data directory: {config.FMRIPREP_DIR}')
+    print(f'Behavioral data directory: {config.BEHAVIOR_DIR}')
+    
+    # Use data_utils for comprehensive checking
+    manager = SubjectManager(config)
+    
+    # Get subjects with any data
+    all_subjects = manager.get_available_subjects(require_both=False)
+    print(f'Total subjects found: {len(all_subjects)}')
+    
+    # Get subjects with complete data
+    complete_subjects = get_complete_subjects(config)
+    print(f'Subjects with complete data: {len(complete_subjects)}')
+    
+    if len(complete_subjects) == 0:
+        print('ERROR: No subjects with complete data found!')
+        print('Check your data paths and file permissions.')
+        sys.exit(1)
+    
+    # Run data integrity check on first 5 subjects for speed
+    print(f'\\nRunning data integrity check on first 5 subjects...')
+    sample_subjects = complete_subjects[:5]
+    integrity_report = check_data_integrity(sample_subjects, config)
+    
+    # Display summary
+    valid_count = integrity_report['complete'].sum()
+    print(f'Validated subjects: {valid_count}/{len(sample_subjects)}')
+    
+    if valid_count == 0:
+        print('ERROR: No subjects passed data integrity check!')
+        print('Data quality issues detected.')
+        sys.exit(1)
+    
+    # Show sample subject details
+    print(f'\\nSample Subject Details:')
+    display_cols = ['subject_id', 'complete', 'n_trials', 'accuracy']
+    available_cols = [col for col in display_cols if col in integrity_report.columns]
+    print(integrity_report[available_cols].head())
+    
+    print(f'\\n✓ Data validation successful!')
+    print(f'✓ Ready to process {len(complete_subjects)} subjects')
+    print('=' * 60)
+    
+except DataError as e:
+    print(f'ERROR: Data validation failed: {e}')
+    sys.exit(1)
+except Exception as e:
+    print(f'ERROR: Unexpected error during data validation: {e}')
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
+"
+
+# Check if data validation passed
+if [ $? -ne 0 ]; then
+    echo "ERROR: Data validation failed. Exiting."
     exit 1
 fi
 
@@ -130,30 +192,58 @@ fi
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 
-# Step 1: Create ROI masks (store on OAK)
-echo "Step 1: Creating ROI masks on OAK..."
+# ENHANCED: Step 1: Create/validate ROI masks using data_utils
+echo "Step 1: Creating/validating ROI masks on OAK using data_utils..."
 python -c "
 import sys
 sys.path.append('.')
 
-# Import and modify create_roi_masks to use OAK paths
-from create_roi_masks import create_roi_masks
+from create_roi_masks import main as create_masks_main
+from data_utils import check_mask_exists, load_mask
 from oak_storage_config import OAKConfig
+from pathlib import Path
 
 config = OAKConfig()
-print(f'Creating masks in: {config.MASKS_DIR}')
-create_roi_masks(output_dir=config.MASKS_DIR, mni_template=None)
+print(f'Masks directory: {config.MASKS_DIR}')
+
+# Use the enhanced create_roi_masks main function (already integrated with data_utils)
+print('Running mask creation/validation...')
+create_masks_main()
+
+# Validate all required masks using data_utils
+print('\\nValidating masks using data_utils...')
+all_masks_valid = True
+mask_info = []
+
+for roi_name, mask_path in config.ROI_MASKS.items():
+    exists = check_mask_exists(mask_path)
+    if exists:
+        try:
+            mask_img = load_mask(mask_path, validate=True)
+            n_voxels = (mask_img.get_fdata() > 0).sum()
+            mask_info.append(f'  ✓ {roi_name}: {n_voxels} voxels')
+        except Exception as e:
+            mask_info.append(f'  ✗ {roi_name}: Validation failed - {e}')
+            all_masks_valid = False
+    else:
+        mask_info.append(f'  ✗ {roi_name}: File not found')
+        all_masks_valid = False
+
+for info in mask_info:
+    print(info)
+
+if not all_masks_valid:
+    print('\\nERROR: Not all masks are valid!')
+    sys.exit(1)
+
+print('\\n✓ All ROI masks validated successfully!')
 "
 
-# Check if masks were created successfully
-if [ ! -f "${MASKS_DIR}/striatum_mask.nii.gz" ] || [ ! -f "${MASKS_DIR}/dlpfc_mask.nii.gz" ] || [ ! -f "${MASKS_DIR}/vmpfc_mask.nii.gz" ]; then
-    echo "Error: ROI masks were not created successfully on OAK"
+# Check if mask validation passed
+if [ $? -ne 0 ]; then
+    echo "ERROR: Mask validation failed. Exiting."
     exit 1
 fi
-
-echo "ROI masks created successfully on OAK"
-echo "Mask files created:"
-ls -lh "${MASKS_DIR}/"*.nii.gz
 
 # Step 2: Run main MVPA analysis (with OAK configuration)
 echo "Step 2: Running main MVPA analysis with OAK storage..."
@@ -191,30 +281,64 @@ fi
 echo "Main analysis completed successfully"
 echo "Results file size: $(ls -lh ${RESULTS_DIR}/all_results.pkl)"
 
-# Step 3: Analyze and visualize results (with OAK paths)
-echo "Step 3: Analyzing and visualizing results..."
+# ENHANCED: Step 3: Analyze and visualize results using data_utils
+echo "Step 3: Analyzing and visualizing results with data_utils integration..."
 python -c "
 import sys
 sys.path.append('.')
 
-from analyze_results import ResultsAnalyzer
+from analyze_results import ResultsAnalyzer, check_pipeline_data_integrity
+from data_utils import load_processed_data, DataError
 from oak_storage_config import OAKConfig
+import os
 
 config = OAKConfig()
 results_file = f'{config.OUTPUT_DIR}/all_results.pkl'
 
 print(f'Analyzing results from: {results_file}')
-analyzer = ResultsAnalyzer(results_file)
 
-# Set output directory to OAK
-analyzer.output_dir = f'{config.OUTPUT_DIR}/analysis_outputs'
+# Check if results file exists
+if not os.path.exists(results_file):
+    print(f'ERROR: Results file not found: {results_file}')
+    sys.exit(1)
 
-# Run analysis
-analyzer.run_complete_analysis()
-print('Results analysis completed successfully')
+try:
+    # Use enhanced data loading from data_utils
+    print('Loading results using data_utils...')
+    results_data, metadata = load_processed_data(results_file)
+    print(f'Results metadata: {metadata}')
+    
+    # Run enhanced analysis
+    analyzer = ResultsAnalyzer(results_file)
+    analyzer.output_dir = f'{config.OUTPUT_DIR}/analysis_outputs'
+    
+    print('Running comprehensive results analysis...')
+    analyzer.run_analysis()
+    
+    # Also run data integrity check for final validation
+    print('\\nRunning final data integrity check...')
+    integrity_report = check_pipeline_data_integrity()
+    
+    print('\\n✓ Results analysis completed successfully!')
+    print(f'✓ Analysis outputs saved to: {analyzer.output_dir}')
+    
+except DataError as e:
+    print(f'ERROR: Data loading failed: {e}')
+    sys.exit(1)
+except Exception as e:
+    print(f'ERROR: Analysis failed: {e}')
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
 "
 
-echo "Results analysis completed"
+# Check if results analysis passed
+if [ $? -ne 0 ]; then
+    echo "ERROR: Results analysis failed. Exiting."
+    exit 1
+fi
+
+echo "✓ Results analysis completed successfully"
 
 # Step 4: Advanced Delay Discounting Geometry Analysis (Optional)
 echo "Step 4: Running advanced delay discounting geometry analysis..."
@@ -377,5 +501,177 @@ echo "To run additional geometry analyses:"
 echo "  python delay_discounting_geometry_analysis.py --neural-data <data.npy> --behavioral-data <behavior.csv>"
 echo "=========================="
 
-echo "Job completed successfully!"
-echo "End time: $(date)" 
+# ENHANCED: Final comprehensive summary using data_utils
+echo ""
+echo "GENERATING COMPREHENSIVE ANALYSIS SUMMARY USING DATA_UTILS..."
+echo "============================================================="
+
+python -c "
+import sys
+sys.path.append('.')
+
+from data_utils import (
+    get_complete_subjects, check_data_integrity, 
+    load_processed_data, SubjectManager
+)
+from oak_storage_config import OAKConfig
+import os
+from pathlib import Path
+
+config = OAKConfig()
+
+print('\\n' + '='*80)
+print('DELAY DISCOUNTING MVPA ANALYSIS - COMPREHENSIVE FINAL SUMMARY')
+print('='*80)
+
+try:
+    # Get final subject counts using data_utils
+    print('\\n📊 SUBJECT SUMMARY (using data_utils):')
+    manager = SubjectManager(config)
+    
+    all_subjects = manager.get_available_subjects(require_both=False)
+    complete_subjects = get_complete_subjects(config)
+    
+    print(f'  Total subjects found: {len(all_subjects)}')
+    print(f'  Complete subjects (fMRI + behavior): {len(complete_subjects)}')
+    print(f'  Data completeness rate: {len(complete_subjects)/len(all_subjects)*100:.1f}%' if all_subjects else 'N/A')
+    
+    # Check results file
+    print('\\n📁 RESULTS FILES:')
+    results_file = f'{config.OUTPUT_DIR}/all_results.pkl'
+    if os.path.exists(results_file):
+        try:
+            results_data, metadata = load_processed_data(results_file)
+            print(f'  ✓ Main results file: {os.path.getsize(results_file)/1024/1024:.1f} MB')
+            print(f'  ✓ Analysis metadata: {metadata}')
+            print(f'  ✓ Results structure: {type(results_data)} with {len(results_data) if hasattr(results_data, \"__len__\") else \"N/A\"} entries')
+        except Exception as e:
+            print(f'  ⚠ Results file exists but loading failed: {e}')
+    else:
+        print(f'  ✗ Main results file not found: {results_file}')
+    
+    # Check analysis outputs
+    print('\\n📈 ANALYSIS OUTPUTS:')
+    analysis_dir = Path(f'{config.OUTPUT_DIR}/analysis_outputs')
+    if analysis_dir.exists():
+        output_files = list(analysis_dir.glob('*'))
+        print(f'  ✓ Analysis outputs created: {len(output_files)} files')
+        
+        # Check for key output files
+        key_files = {
+            'summary_report.txt': 'Summary report',
+            'behavioral_distributions.png': 'Behavioral plots', 
+            'group_mvpa_statistics.csv': 'MVPA statistics',
+            'data_integrity_report.csv': 'Data integrity report'
+        }
+        
+        for filename, description in key_files.items():
+            file_path = analysis_dir / filename
+            if file_path.exists():
+                size_mb = file_path.stat().st_size / 1024 / 1024
+                print(f'    ✓ {description}: {filename} ({size_mb:.2f} MB)')
+            else:
+                print(f'    ⚠ {description}: {filename} - MISSING')
+    else:
+        print(f'  ✗ Analysis outputs directory not found: {analysis_dir}')
+    
+    # Run final data integrity check using data_utils
+    print('\\n🔍 FINAL DATA INTEGRITY CHECK (using data_utils):')
+    if complete_subjects:
+        # Check first 10 subjects for speed
+        sample_size = min(10, len(complete_subjects))
+        sample_subjects = complete_subjects[:sample_size]
+        
+        try:
+            integrity_report = check_data_integrity(sample_subjects, config)
+            
+            if len(integrity_report) > 0:
+                total_checked = len(integrity_report)
+                complete_count = integrity_report['complete'].sum()
+                valid_behavior = integrity_report['behavior_valid'].sum()
+                valid_fmri = integrity_report['fmri_valid'].sum()
+                
+                print(f'  📋 Sample checked: {total_checked} subjects')
+                print(f'  ✓ Complete: {complete_count}/{total_checked} ({complete_count/total_checked*100:.1f}%)')
+                print(f'  ✓ Valid behavioral: {valid_behavior}/{total_checked} ({valid_behavior/total_checked*100:.1f}%)')
+                print(f'  ✓ Valid fMRI: {valid_fmri}/{total_checked} ({valid_fmri/total_checked*100:.1f}%)')
+                
+                if complete_count > 0:
+                    complete_data = integrity_report[integrity_report['complete']]
+                    avg_trials = complete_data['n_trials'].mean()
+                    avg_accuracy = complete_data['accuracy'].mean()
+                    print(f'  📊 Average trials: {avg_trials:.1f}')
+                    print(f'  📊 Average accuracy: {avg_accuracy:.3f}')
+            else:
+                print('  ⚠ No subjects in integrity report')
+                
+        except Exception as e:
+            print(f'  ✗ Integrity check failed: {e}')
+    else:
+        print('  ⚠ No complete subjects found for integrity check')
+    
+    # Check ROI masks using data_utils
+    print('\\n🎭 ROI MASKS VALIDATION (using data_utils):')
+    from data_utils import check_mask_exists, load_mask
+    
+    mask_summary = []
+    for roi_name, mask_path in config.ROI_MASKS.items():
+        exists = check_mask_exists(mask_path)
+        if exists:
+            try:
+                mask_img = load_mask(mask_path, validate=True)
+                n_voxels = (mask_img.get_fdata() > 0).sum()
+                size_mb = os.path.getsize(mask_path) / 1024 / 1024
+                mask_summary.append(f'    ✓ {roi_name}: {n_voxels:,} voxels ({size_mb:.2f} MB)')
+            except Exception as e:
+                mask_summary.append(f'    ⚠ {roi_name}: Validation failed - {e}')
+        else:
+            mask_summary.append(f'    ✗ {roi_name}: File not found')
+    
+    for summary in mask_summary:
+        print(summary)
+    
+    print('\\n' + '='*80)
+    print('✅ ANALYSIS PIPELINE COMPLETED SUCCESSFULLY WITH DATA_UTILS INTEGRATION!')
+    print('='*80)
+    
+except Exception as e:
+    print(f'\\n❌ Error generating comprehensive summary: {e}')
+    import traceback
+    traceback.print_exc()
+    print('='*80)
+"
+
+echo ""
+echo "🎉 DELAY DISCOUNTING MVPA ANALYSIS COMPLETED!"
+echo "============================================="
+echo ""
+echo "⏰ Job completed at: $(date)"
+echo "⌛ Total runtime: $((SECONDS/3600))h $(((SECONDS%3600)/60))m $((SECONDS%60))s"
+echo ""
+echo "📂 Results stored in: ${RESULTS_DIR}"
+echo "📄 Log file: ${RESULTS_DIR}/slurm-${SLURM_JOB_ID}.out"
+echo ""
+echo "🚀 ENHANCED FEATURES (using data_utils):"
+echo "  ✅ Comprehensive data validation and integrity checking"
+echo "  ✅ Automated subject discovery with quality control"
+echo "  ✅ Enhanced mask creation and validation"
+echo "  ✅ Improved error handling and detailed reporting"
+echo "  ✅ Centralized data loading with metadata tracking"
+echo ""
+echo "📋 KEY OUTPUT FILES:"
+echo "  1. 📊 Data integrity report: ${RESULTS_DIR}/analysis_outputs/data_integrity_report.csv"
+echo "  2. 📈 Enhanced analysis outputs: ${RESULTS_DIR}/analysis_outputs/"
+echo "  3. 📝 Comprehensive summary: ${RESULTS_DIR}/analysis_outputs/summary_report.txt"
+echo "  4. 🧠 Individual results: ${RESULTS_DIR}/"
+echo "  5. 🎭 Validated ROI masks: ${MASKS_DIR}/"
+echo ""
+echo "📚 DOCUMENTATION:"
+echo "  - Main README: README.md"
+echo "  - Data utilities guide: DATA_UTILS_README.md"
+echo "  - Demo script: python demo_data_utils.py"
+echo ""
+echo "🔧 FOR FUTURE ANALYSES:"
+echo "  - Use data_utils functions for consistent data handling"
+echo "  - Run 'python analyze_results.py --check_data' for data integrity checks"
+echo "  - See DATA_UTILS_README.md for complete usage examples" 

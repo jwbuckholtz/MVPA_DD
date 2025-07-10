@@ -9,7 +9,8 @@ This pipeline is designed for cognitive neuroscience researchers studying delay 
 1. **Behavioral Analysis**: Hyperbolic discounting parameter estimation
 2. **MVPA Decoding**: Classification and regression on neural data  
 3. **Neural Geometry**: Low-dimensional embedding analysis
-4. **Visualization**: Comprehensive results plotting and reporting
+4. **Data Utilities**: Centralized data loading and validation system (NEW!)
+5. **Visualization**: Comprehensive results plotting and reporting
 
 ## Dataset
 
@@ -143,7 +144,50 @@ sbatch submit_analysis_job.sh
 python analyze_results.py
 ```
 
-### 5. Neural Geometry Analysis (Optional)
+### 5. Data Utilities and Quality Control (NEW!)
+
+The pipeline now includes a centralized data utilities module (`data_utils.py`) that provides:
+
+#### Check Data Integrity
+```bash
+# Check data availability and quality for all subjects
+python analyze_results.py --check_data
+
+# Demonstrate all data utilities features
+python demo_data_utils.py
+
+# Quick demo (faster)
+python demo_data_utils.py --quick
+```
+
+#### Key Features
+- **Centralized Data Loading**: Single functions for behavioral, fMRI, and confounds data
+- **Automatic Validation**: Quality control for all data types
+- **Subject Discovery**: Automated finding of subjects with complete data
+- **ROI Operations**: Streamlined mask loading and time series extraction
+- **Error Handling**: Robust error handling with custom exceptions
+
+#### Usage in Scripts
+```python
+from data_utils import (
+    load_behavioral_data, load_fmri_data, get_complete_subjects,
+    check_data_integrity
+)
+
+# Find subjects with complete data
+subjects = get_complete_subjects()
+
+# Load data with validation and preprocessing
+behavioral_data = load_behavioral_data(subject_id, config, validate=True)
+fmri_img = load_fmri_data(subject_id, config)
+
+# Check data integrity
+integrity_report = check_data_integrity(subjects)
+```
+
+See `DATA_UTILS_README.md` for comprehensive documentation.
+
+### 6. Neural Geometry Analysis (Optional)
 
 #### Run Specialized Delay Discounting Geometry Analysis
 ```bash
