@@ -1,0 +1,539 @@
+# MVPA Delay Discounting Analysis Configuration
+# Central configuration file for all analysis parameters
+# Version: 1.0
+# Last updated: 2024-01-10
+
+# =============================================================================
+# STUDY INFORMATION
+# =============================================================================
+study:
+  name: "Delay Discounting MVPA Analysis"
+  description: "Stanford Delay Discounting fMRI Analysis with MVPA and Neural Geometry"
+  version: "1.0"
+  pi: "Russell Poldrack"
+  contact: "your_email@stanford.edu"
+
+# =============================================================================
+# DATA PATHS
+# =============================================================================
+paths:
+  # Input data paths
+  data_root: "/oak/stanford/groups/russpold/data/uh2/aim1"
+  fmriprep_dir: "/oak/stanford/groups/russpold/data/uh2/aim1/derivatives/fmriprep"
+  behavior_dir: "/oak/stanford/groups/russpold/data/uh2/aim1/behavioral_data/event_files"
+  
+  # Output paths
+  output_root: "/oak/stanford/groups/russpold/data/uh2/aim1/derivatives/mvpa_analysis"
+  output_dir: "/oak/stanford/groups/russpold/data/uh2/aim1/derivatives/mvpa_analysis/delay_discounting_results"
+  
+  # Specific output directories
+  behavioral_output: "behavioral_analysis"
+  mvpa_output: "mvpa_analysis"
+  geometry_output: "geometry_analysis"
+  dd_geometry_output: "dd_geometry_results"
+  
+  # Mask and cache directories
+  masks_dir: "/oak/stanford/groups/russpold/data/uh2/aim1/derivatives/masks"
+  cache_dir: "/oak/stanford/groups/russpold/data/uh2/aim1/derivatives/mvpa_analysis/analysis_cache"
+  
+  # Logging
+  log_dir: "./logs"
+
+# =============================================================================
+# fMRI ACQUISITION PARAMETERS
+# =============================================================================
+fmri:
+  tr: 0.68  # Repetition time in seconds
+  hemi_lag: 0  # Hemodynamic lag in TRs
+  smoothing_fwhm: 6.0  # Smoothing kernel FWHM in mm
+  high_pass_filter: 0.01  # High-pass filter cutoff in Hz
+  
+  # Preprocessing parameters
+  standardize: true
+  detrend: true
+  confound_strategy: "auto"  # auto, minimal, full
+  
+  # Slice timing correction
+  slice_time_ref: 0.5  # Reference slice timing (0-1)
+
+# =============================================================================
+# ROI MASKS CONFIGURATION
+# =============================================================================
+roi_masks:
+  # Core ROI masks (required for analysis)
+  core_rois:
+    - "striatum"
+    - "dlpfc"
+    - "vmpfc"
+  
+  # Optional ROI masks (used if available)
+  optional_rois:
+    - "left_striatum"
+    - "right_striatum"
+    - "left_dlpfc"
+    - "right_dlpfc"
+    - "acc"
+    - "ofc"
+    - "anterior_insula"
+    - "posterior_insula"
+    - "precuneus"
+    - "pcc"
+  
+  # Mask file paths (relative to masks_dir)
+  mask_files:
+    striatum: "striatum_mask.nii.gz"
+    dlpfc: "dlpfc_mask.nii.gz"
+    vmpfc: "vmpfc_mask.nii.gz"
+    left_striatum: "left_striatum_mask.nii.gz"
+    right_striatum: "right_striatum_mask.nii.gz"
+    left_dlpfc: "left_dlpfc_mask.nii.gz"
+    right_dlpfc: "right_dlpfc_mask.nii.gz"
+    acc: "acc_mask.nii.gz"
+    ofc: "ofc_mask.nii.gz"
+    anterior_insula: "anterior_insula_mask.nii.gz"
+    posterior_insula: "posterior_insula_mask.nii.gz"
+    precuneus: "precuneus_mask.nii.gz"
+    pcc: "pcc_mask.nii.gz"
+
+# =============================================================================
+# BEHAVIORAL ANALYSIS PARAMETERS
+# =============================================================================
+behavioral:
+  # Quality control thresholds
+  min_accuracy: 0.6  # Minimum behavioral accuracy
+  max_rt: 10.0  # Maximum reaction time in seconds
+  min_rt: 0.1  # Minimum reaction time in seconds
+  
+  # Behavioral modeling
+  discount_model: "hyperbolic"  # hyperbolic, exponential, quasi_hyperbolic
+  fit_method: "least_squares"  # least_squares, maximum_likelihood
+  
+  # Behavioral variables to extract
+  variables:
+    - "choice"
+    - "choice_binary"
+    - "rt"
+    - "onset"
+    - "delay_days"
+    - "amount_small"
+    - "amount_large"
+    - "sv_chosen"
+    - "sv_unchosen"
+    - "sv_diff"
+    - "sv_sum"
+    - "later_delay"
+    - "discount_rate"
+    - "model_fit"
+
+# =============================================================================
+# MVPA ANALYSIS PARAMETERS
+# =============================================================================
+mvpa:
+  # Cross-validation settings
+  cv_folds: 5
+  cv_shuffle: true
+  cv_random_state: 42
+  cv_strategy: "stratified"  # stratified, kfold, leave_one_out
+  
+  # Permutation testing
+  n_permutations: 1000
+  perm_random_state: 42
+  alpha: 0.05
+  multiple_comparisons: "fdr_bh"  # fdr_bh, bonferroni, none
+  
+  # Machine learning algorithms
+  classification:
+    default_algorithm: "svm"
+    algorithms:
+      svm:
+        C: 1.0
+        kernel: "linear"
+        class_weight: "balanced"
+      logistic:
+        C: 1.0
+        class_weight: "balanced"
+        solver: "liblinear"
+      random_forest:
+        n_estimators: 100
+        max_depth: 10
+        class_weight: "balanced"
+  
+  regression:
+    default_algorithm: "ridge"
+    algorithms:
+      ridge:
+        alpha: 1.0
+        normalize: false
+      lasso:
+        alpha: 1.0
+        normalize: false
+      elastic_net:
+        alpha: 1.0
+        l1_ratio: 0.5
+        normalize: false
+  
+  # Feature selection
+  feature_selection:
+    enabled: false
+    method: "univariate"  # univariate, rfe, tree_based
+    n_features: 1000
+    score_func: "f_classif"  # f_classif, f_regression, mutual_info
+  
+  # Preprocessing
+  preprocessing:
+    standardize: true
+    remove_mean: true
+    variance_threshold: 1e-8
+  
+  # Decoding targets
+  targets:
+    classification:
+      - "choice_binary"
+    regression:
+      - "sv_diff"
+      - "sv_sum"
+      - "sv_chosen"
+      - "sv_unchosen"
+      - "later_delay"
+      - "discount_rate"
+  
+  # Quality control
+  quality_control:
+    min_samples_per_class: 5
+    min_trials_per_subject: 20
+    max_missing_data: 0.1
+
+# =============================================================================
+# NEURAL GEOMETRY ANALYSIS
+# =============================================================================
+geometry:
+  # Output settings
+  output_dir: "./dd_geometry_results"
+  save_plots: true
+  plot_format: "png"
+  dpi: 300
+  
+  # Statistical parameters
+  n_permutations: 1000
+  random_state: 42
+  alpha: 0.05
+  
+  # Dimensionality reduction
+  dimensionality_reduction:
+    pca:
+      n_components: 15
+      whiten: false
+    mds:
+      n_components: 8
+      metric: true
+      dissimilarity: "euclidean"
+    tsne:
+      n_components: 3
+      perplexity: 30
+      learning_rate: 200
+    isomap:
+      n_components: 5
+      n_neighbors: 10
+  
+  # Data preprocessing
+  preprocessing:
+    standardize_data: true
+    remove_mean: true
+    
+  # Delay discounting specific parameters
+  delay_discounting:
+    delay_short_threshold: 7  # Days - delays <= this are "short"
+    delay_long_threshold: 30  # Days - delays >= this are "long"
+    value_percentile_split: 50  # Percentile for median splits
+    value_diff_percentile: 67  # Percentile for tercile splits
+  
+  # Comparison types
+  comparisons:
+    choice:
+      description: "Compare neural geometry between sooner-smaller vs larger-later choices"
+      behavioral_column: "choice"
+      enabled: true
+    delay_short_vs_long:
+      description: "Compare short delays (≤7 days) vs long delays (≥30 days)"
+      behavioral_column: "delay_days"
+      enabled: true
+    delay_immediate_vs_delayed:
+      description: "Compare immediate (0 days) vs any delayed trials"
+      behavioral_column: "delay_days"
+      enabled: true
+    sv_chosen_median:
+      description: "Compare trials with high vs low chosen option subjective value"
+      behavioral_column: "sv_chosen"
+      enabled: true
+    sv_unchosen_median:
+      description: "Compare trials with high vs low unchosen option subjective value"
+      behavioral_column: "sv_unchosen"
+      enabled: true
+    sv_difference_median:
+      description: "Compare trials with high vs low difference in subjective values"
+      behavioral_column: "sv_diff"
+      enabled: true
+    value_diff_terciles:
+      description: "Compare trials where options are very similar vs very different in value"
+      behavioral_column: "sv_diff"
+      enabled: true
+  
+  # Advanced geometry methods
+  advanced_methods:
+    manifold_alignment:
+      enabled: true
+      method: "procrustes"  # procrustes, cca
+    information_geometry:
+      enabled: true
+      compute_curvature: true
+    geodesic_distances:
+      enabled: true
+      n_neighbors: 10
+
+# =============================================================================
+# PARALLEL PROCESSING
+# =============================================================================
+parallel:
+  # Core parallel settings
+  n_jobs: -1  # -1 for all cores, or specify number
+  backend: "loky"  # loky, threading, multiprocessing
+  
+  # Subject-level parallelization
+  subjects:
+    enabled: true
+    n_jobs: 8
+    chunk_size: 1
+  
+  # ROI-level parallelization
+  rois:
+    enabled: true
+    n_jobs: 4
+    chunk_size: 1
+  
+  # Nested parallelization
+  nested_parallel:
+    enabled: true
+    max_workers: 16
+  
+  # Resource management
+  resource_management:
+    memory_limit_gb: 64
+    cpu_limit: 16
+    timeout_minutes: 120
+
+# =============================================================================
+# MEMORY EFFICIENCY
+# =============================================================================
+memory:
+  # Memory mapping settings
+  memory_mapping:
+    enabled: true
+    threshold_gb: 1.0  # Use memory mapping for data > threshold
+    force_memmap: false
+    
+  # Memory buffer settings
+  memory_buffer:
+    available_memory_buffer: 0.2  # Keep 20% of memory free
+    max_memory_per_process_gb: 8.0
+    
+  # Shared memory for parallel processing
+  shared_memory:
+    enabled: true
+    temp_dir: "/tmp/mvpa_memmap"
+    
+  # Memory monitoring
+  monitoring:
+    enabled: true
+    log_usage: true
+    warning_threshold: 0.8  # Warn when memory usage > 80%
+
+# =============================================================================
+# CACHING SYSTEM
+# =============================================================================
+caching:
+  # Cache settings
+  enabled: true
+  cache_dir: "analysis_cache"
+  version: "1.0"
+  
+  # Cache management
+  management:
+    max_cache_size_gb: 50
+    cleanup_threshold: 0.8
+    auto_cleanup: true
+    
+  # Cache precision
+  precision:
+    float_precision: 6
+    hash_precision: 16
+    
+  # Cache levels
+  levels:
+    behavioral_analysis: true
+    beta_extraction: true
+    mvpa_decoding: true
+    geometry_analysis: true
+    
+  # Cache invalidation
+  invalidation:
+    on_config_change: true
+    on_code_change: true
+    on_data_change: true
+
+# =============================================================================
+# LOGGING AND DEBUGGING
+# =============================================================================
+logging:
+  # Log levels
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  
+  # Log destinations
+  console: true
+  file: true
+  
+  # Log file settings
+  log_file: "mvpa_analysis.log"
+  max_file_size_mb: 100
+  backup_count: 5
+  
+  # Component-specific logging
+  components:
+    behavioral: "INFO"
+    mvpa: "INFO"
+    geometry: "INFO"
+    parallel: "INFO"
+    memory: "INFO"
+    caching: "INFO"
+  
+  # Performance logging
+  performance:
+    enabled: true
+    log_memory_usage: true
+    log_timing: true
+    log_progress: true
+
+# =============================================================================
+# SLURM/HPC CONFIGURATION
+# =============================================================================
+slurm:
+  # Job settings
+  job_name: "delay_discounting_mvpa"
+  partition: "normal"
+  time: "08:00:00"
+  
+  # Resource requests
+  nodes: 1
+  ntasks: 1
+  cpus_per_task: 16
+  memory_gb: 32
+  
+  # Output settings
+  output_dir: "./logs"
+  mail_type: "ALL"
+  mail_user: "your_email@stanford.edu"
+  
+  # Environment optimization
+  environment:
+    omp_num_threads: "auto"  # auto or specific number
+    pythonpath: "."
+    
+  # Auto-configuration
+  auto_configure:
+    enabled: true
+    memory_multiplier: 0.8  # Use 80% of allocated memory
+    cpu_multiplier: 1.0  # Use all allocated CPUs
+
+# =============================================================================
+# VISUALIZATION SETTINGS
+# =============================================================================
+visualization:
+  # General plotting settings
+  style: "seaborn-v0_8"
+  context: "paper"
+  palette: "husl"
+  
+  # Figure settings
+  figure:
+    dpi: 300
+    format: "png"
+    size:
+      width: 10
+      height: 8
+    
+  # Color settings
+  colors:
+    primary: "#1f77b4"
+    secondary: "#ff7f0e"
+    success: "#2ca02c"
+    warning: "#d62728"
+    
+  # Plot types
+  plots:
+    behavioral_distributions: true
+    mvpa_results: true
+    geometry_visualizations: true
+    performance_plots: true
+    
+  # Statistical plotting
+  statistics:
+    show_confidence_intervals: true
+    show_significance_stars: true
+    alpha_level: 0.05
+
+# =============================================================================
+# VALIDATION AND QUALITY CONTROL
+# =============================================================================
+validation:
+  # Data validation
+  data_validation:
+    enabled: true
+    check_completeness: true
+    check_quality: true
+    
+  # ROI mask validation
+  roi_validation:
+    enabled: true
+    check_existence: true
+    check_integrity: true
+    min_voxels: 50  # Minimum voxels for valid ROI
+    
+  # Results validation
+  results_validation:
+    enabled: true
+    check_convergence: true
+    check_sanity: true
+    
+  # Quality control thresholds
+  quality_thresholds:
+    min_accuracy: 0.5
+    max_cv_error: 0.1
+    min_r2: 0.01
+
+# =============================================================================
+# ADVANCED FEATURES
+# =============================================================================
+advanced:
+  # Experimental features
+  experimental:
+    enabled: false
+    features:
+      - "multi_modal_analysis"
+      - "deep_learning_decoding"
+      - "real_time_analysis"
+  
+  # Custom analysis modules
+  custom_modules:
+    enabled: false
+    module_paths: []
+    
+  # Integration with external tools
+  integrations:
+    freesurfer: false
+    fsl: false
+    afni: false
+    
+  # Performance optimization
+  optimization:
+    use_fast_math: true
+    use_mkl: true
+    use_gpu: false 
