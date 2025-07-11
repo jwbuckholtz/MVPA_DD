@@ -1,0 +1,24 @@
+{
+  "output_dir": "./dd_geometry_results",
+  "n_permutations": 1000,
+  "random_state": 42,
+  "alpha": 0.05,
+  "n_components_pca": 15,
+  "n_components_mds": 8,
+  "standardize_data": true,
+  "plot_format": "png",
+  "dpi": 300,
+  
+  "delay_short_threshold": 7,
+  "delay_long_threshold": 30,
+  
+  "comparison_descriptions": {
+    "choice": "Compare neural geometry between sooner-smaller vs larger-later choices",
+    "delay_short_vs_long": "Compare short delays (≤7 days) vs long delays (≥30 days)",
+    "delay_immediate_vs_delayed": "Compare immediate (0 days) vs any delayed trials",
+    "sv_chosen_median": "Compare trials with high vs low chosen option subjective value",
+    "sv_unchosen_median": "Compare trials with high vs low unchosen option subjective value", 
+    "sv_difference_median": "Compare trials with high vs low difference in subjective values",
+    "value_diff_terciles": "Compare trials where options are very similar vs very different in value"
+  }
+} 

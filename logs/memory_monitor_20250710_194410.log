@@ -1,0 +1,6 @@
+2025-07-10 19:44:10 - memory_monitor - INFO - Logger initialized: memory_monitor
+2025-07-10 19:44:10 - memory_monitor - INFO - System info - Memory: 36.0 GB, CPUs: 14, Available: 9.2 GB
+2025-07-10 19:44:10 - memory_monitor - INFO - Memory usage initialization: 0.16 GB (0.4% of system), System: 14.03/36.00 GB (74.3%)
+2025-07-10 19:44:10 - memory_monitor - INFO - Memory usage initialization: 0.16 GB (0.4% of system), System: 14.03/36.00 GB (74.3%)
+2025-07-10 19:44:10 - memory_monitor - INFO - Memory usage context start: 0.16 GB (0.4% of system), System: 14.03/36.00 GB (74.3%)
+2025-07-10 19:44:10 - memory_monitor - INFO - Memory usage initialization: 0.16 GB (0.4% of system), System: 14.03/36.00 GB (74.3%)

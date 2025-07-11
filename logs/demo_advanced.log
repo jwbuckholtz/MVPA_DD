@@ -1,0 +1,52 @@
+2025-07-10 18:27:23,017 - demo_advanced_logging - INFO - logger_utils.py:161 - ============================================================
+2025-07-10 18:27:23,017 - demo_advanced_logging - INFO - logger_utils.py:162 - Starting Demo Advanced Logging
+2025-07-10 18:27:23,017 - demo_advanced_logging - INFO - logger_utils.py:164 - Description: File logging and error handling
+2025-07-10 18:27:23,017 - demo_advanced_logging - INFO - logger_utils.py:165 - Timestamp: 2025-07-10T18:27:23.017530
+2025-07-10 18:27:23,017 - demo_advanced_logging - INFO - logger_utils.py:166 - ============================================================
+2025-07-10 18:27:23,017 - demo_advanced_logging - ERROR - logger_utils.py:185 - Error in demo division: division by zero
+2025-07-10 18:27:23,017 - demo_advanced_logging - DEBUG - logger_utils.py:191 - Full traceback:
+Traceback (most recent call last):
+  File "/Users/joshuabuckholtz/Code/MVPA_DD/demo_logger_utils.py", line 80, in demo_advanced_logging
+    result = 1 / 0
+ZeroDivisionError: division by zero
+
+2025-07-10 18:27:23,122 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 1/10 (10.0%) - Item 1 [Elapsed: 0:00:00.105034, ETA: 0:00:00.945306]
+2025-07-10 18:27:23,228 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 2/10 (20.0%) - Item 2 [Elapsed: 0:00:00.210256, ETA: 0:00:00.841024]
+2025-07-10 18:27:23,333 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 3/10 (30.0%) - Item 3 [Elapsed: 0:00:00.315448, ETA: 0:00:00.736045]
+2025-07-10 18:27:23,438 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 4/10 (40.0%) - Item 4 [Elapsed: 0:00:00.420479, ETA: 0:00:00.630718]
+2025-07-10 18:27:23,543 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 5/10 (50.0%) - Item 5 [Elapsed: 0:00:00.525729, ETA: 0:00:00.525729]
+2025-07-10 18:27:23,647 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 6/10 (60.0%) - Item 6 [Elapsed: 0:00:00.629716, ETA: 0:00:00.419811]
+2025-07-10 18:27:23,748 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 7/10 (70.0%) - Item 7 [Elapsed: 0:00:00.730794, ETA: 0:00:00.313197]
+2025-07-10 18:27:23,853 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 8/10 (80.0%) - Item 8 [Elapsed: 0:00:00.836026, ETA: 0:00:00.209006]
+2025-07-10 18:27:23,959 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 9/10 (90.0%) - Item 9 [Elapsed: 0:00:00.941217, ETA: 0:00:00.104580]
+2025-07-10 18:27:24,064 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 10/10 (100.0%) - Item 10 [Elapsed: 0:00:01.046395]
+2025-07-10 18:27:24,064 - demo_advanced_logging - INFO - logger_utils.py:174 - ============================================================
+2025-07-10 18:27:24,064 - demo_advanced_logging - INFO - logger_utils.py:175 - Demo Advanced Logging COMPLETED
+2025-07-10 18:27:24,064 - demo_advanced_logging - INFO - logger_utils.py:176 - Timestamp: 2025-07-10T18:27:24.064451
+2025-07-10 18:27:24,064 - demo_advanced_logging - INFO - logger_utils.py:177 - ============================================================
+2025-07-10 18:27:50,548 - demo_advanced_logging - INFO - logger_utils.py:161 - ============================================================
+2025-07-10 18:27:50,548 - demo_advanced_logging - INFO - logger_utils.py:162 - Starting Demo Advanced Logging
+2025-07-10 18:27:50,548 - demo_advanced_logging - INFO - logger_utils.py:164 - Description: File logging and error handling
+2025-07-10 18:27:50,548 - demo_advanced_logging - INFO - logger_utils.py:165 - Timestamp: 2025-07-10T18:27:50.548418
+2025-07-10 18:27:50,548 - demo_advanced_logging - INFO - logger_utils.py:166 - ============================================================
+2025-07-10 18:27:50,548 - demo_advanced_logging - ERROR - logger_utils.py:185 - Error in demo division: division by zero
+2025-07-10 18:27:50,548 - demo_advanced_logging - DEBUG - logger_utils.py:191 - Full traceback:
+Traceback (most recent call last):
+  File "/Users/joshuabuckholtz/Code/MVPA_DD/demo_logger_utils.py", line 80, in demo_advanced_logging
+    result = 1 / 0
+ZeroDivisionError: division by zero
+
+2025-07-10 18:27:50,653 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 1/10 (10.0%) - Item 1 [Elapsed: 0:00:00.105030, ETA: 0:00:00.945270]
+2025-07-10 18:27:50,754 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 2/10 (20.0%) - Item 2 [Elapsed: 0:00:00.205695, ETA: 0:00:00.822780]
+2025-07-10 18:27:50,856 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 3/10 (30.0%) - Item 3 [Elapsed: 0:00:00.307530, ETA: 0:00:00.717570]
+2025-07-10 18:27:50,961 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 4/10 (40.0%) - Item 4 [Elapsed: 0:00:00.412829, ETA: 0:00:00.619244]
+2025-07-10 18:27:51,061 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 5/10 (50.0%) - Item 5 [Elapsed: 0:00:00.513217, ETA: 0:00:00.513217]
+2025-07-10 18:27:51,164 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 6/10 (60.0%) - Item 6 [Elapsed: 0:00:00.615827, ETA: 0:00:00.410551]
+2025-07-10 18:27:51,269 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 7/10 (70.0%) - Item 7 [Elapsed: 0:00:00.721058, ETA: 0:00:00.309025]
+2025-07-10 18:27:51,372 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 8/10 (80.0%) - Item 8 [Elapsed: 0:00:00.824198, ETA: 0:00:00.206050]
+2025-07-10 18:27:51,478 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 9/10 (90.0%) - Item 9 [Elapsed: 0:00:00.929424, ETA: 0:00:00.103269]
+2025-07-10 18:27:51,583 - demo_advanced_logging - INFO - logger_utils.py:240 - Processing items: 10/10 (100.0%) - Item 10 [Elapsed: 0:00:01.034641]
+2025-07-10 18:27:51,583 - demo_advanced_logging - INFO - logger_utils.py:174 - ============================================================
+2025-07-10 18:27:51,583 - demo_advanced_logging - INFO - logger_utils.py:175 - Demo Advanced Logging COMPLETED
+2025-07-10 18:27:51,583 - demo_advanced_logging - INFO - logger_utils.py:176 - Timestamp: 2025-07-10T18:27:51.583585
+2025-07-10 18:27:51,583 - demo_advanced_logging - INFO - logger_utils.py:177 - ============================================================

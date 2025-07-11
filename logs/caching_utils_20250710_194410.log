@@ -1,0 +1,3 @@
+2025-07-10 19:44:10 - caching_utils - INFO - Logger initialized: caching_utils
+2025-07-10 19:44:10 - caching_utils - INFO - System info - Memory: 36.0 GB, CPUs: 14, Available: 9.2 GB
+2025-07-10 19:44:10 - caching_utils - INFO - Cache manager initialized: /var/folders/vw/j8dthg_x6cqcvsc8s4l2vsxh0000gn/T/test_cache
