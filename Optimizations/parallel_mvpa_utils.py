@@ -322,8 +322,9 @@ def process_single_subject(subject_id: str, config: OAKConfig,
     try:
         # Import here to avoid issues with parallel processing
         from delay_discounting_mvpa_pipeline import (
-            BehavioralAnalysis, fMRIPreprocessing, MVPAAnalysis, GeometryAnalysis
+            BehavioralAnalysis, fMRIPreprocessing, MVPAAnalysis
         )
+        from geometry_analysis import GeometryAnalysis
         
         # Initialize analysis classes
         behavioral_analysis = BehavioralAnalysis(config)

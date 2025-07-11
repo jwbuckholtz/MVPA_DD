@@ -50,6 +50,21 @@ python3 delay_discounting_mvpa_pipeline.py --mvpa-only
 python3 delay_discounting_mvpa_pipeline.py --subjects subject_001 subject_002
 ```
 
+#### Geometry Analysis (Enhanced!)
+```bash
+# Standard geometry analysis
+python3 delay_discounting_geometry_analysis.py --example
+
+# Advanced trajectory analysis only
+python3 delay_discounting_geometry_analysis.py --example --trajectory-only
+
+# Comprehensive analysis (standard + trajectory)
+python3 delay_discounting_geometry_analysis.py --example --comprehensive
+
+# Standard with trajectory as bonus
+python3 delay_discounting_geometry_analysis.py --example --trajectory
+```
+
 #### Sherlock HPC
 ```bash
 # Interactive testing session
@@ -183,6 +198,8 @@ module purge
 
 ### Scripts
 - `delay_discounting_mvpa_pipeline.py` - Main analysis pipeline
+- `delay_discounting_geometry_analysis.py` - Comprehensive geometry analysis (enhanced!)
+- `geometry_utils.py` - Consolidated geometry functions library (NEW!)
 - `analyze_results.py` - Results visualization
 - `run_tests.py` - Test launcher
 
@@ -195,6 +212,11 @@ results/
 ├── mvpa_analysis/
 │   ├── mvpa_summary.csv
 │   └── roi_decoding_results.png
+├── geometry_analysis/  (enhanced!)
+│   ├── geometry_summary.csv
+│   ├── *_geometry.png (standard visualizations)
+│   ├── trajectory_analysis_summary.json (NEW!)
+│   └── *_advanced_geometry.png (NEW! 6-panel trajectory plots)
 └── analysis_report.txt
 ```
 
@@ -228,6 +250,13 @@ results/
 2. `python3 delay_discounting_mvpa_pipeline.py --subjects [subject_list]`
 3. `python3 analyze_results.py`
 4. Review results in `results/` directory
+
+#### Local/Farmshare + Geometry Focus
+1. `source mvpa_env/bin/activate`
+2. `python3 delay_discounting_mvpa_pipeline.py --subjects [subject_list]` (includes basic geometry)
+3. `python3 delay_discounting_geometry_analysis.py --example --comprehensive` (advanced geometry)
+4. `python3 analyze_results.py`
+5. Review both MVPA and advanced geometry results
 
 #### Sherlock HPC
 1. `ssh username@login.sherlock.stanford.edu && cd $SCRATCH/delay_discounting_analysis`
@@ -277,6 +306,28 @@ result = behavioral.process_subject('subject_001')
 # Save/load results
 behavioral.save_results('behavioral_results.pkl')
 loaded = behavioral.load_results('behavioral_results.pkl')
+```
+
+### Geometry Utilities (NEW!)
+```python
+from geometry_utils import (
+    compute_manifold_alignment,
+    compute_information_geometry_metrics,
+    compute_geodesic_distances,
+    analyze_trajectory_dynamics
+)
+
+# Manifold alignment between conditions
+alignment = compute_manifold_alignment(X1, X2, method='procrustes')
+
+# Information geometry metrics
+info_metrics = compute_information_geometry_metrics(X1, X2)
+
+# Geodesic distances for non-linear manifold analysis
+geodesic_dist = compute_geodesic_distances(neural_data, k=5)
+
+# Trajectory dynamics across conditions
+trajectory_results = analyze_trajectory_dynamics(embeddings, conditions)
 ```
 
 ---

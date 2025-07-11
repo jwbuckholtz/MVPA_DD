@@ -10,7 +10,7 @@ Supports multiple comparison types:
 - Value differences (high vs low difference between options)
 - Custom continuous and categorical splits
 
-Author: Joshua Buckholtz Lab
+Author: Cognitive Neuroscience Lab, Stanford University
 """
 
 import os
@@ -36,6 +36,17 @@ from scipy.spatial.distance import pdist, squareform
 from scipy.spatial import procrustes
 from scipy.stats import gaussian_kde
 from mpl_toolkits.mplot3d import Axes3D
+
+# Import shared geometry utilities
+from geometry_utils import (
+    compute_manifold_alignment, compute_procrustes_alignment, compute_cca_alignment,
+    compute_information_geometry_metrics, compute_kl_divergence, compute_js_divergence,
+    compute_wasserstein_approximation, compute_geodesic_distances, compute_manifold_curvature,
+    compute_regression_alignment
+)
+
+# NOTE: All geometric transformation functions are now consolidated in geometry_utils.py
+# This eliminates the need to import from geometric_transformation_analysis.py
 
 # Import from main pipeline if available
 try:
@@ -617,173 +628,17 @@ class DelayDiscountingGeometryAnalyzer:
     # ===== ADVANCED GEOMETRY ANALYSIS METHODS =====
     # (From geometric_transformation_analysis.py)
     
-    def compute_manifold_alignment(self, X1: np.array, X2: np.array, 
-                                 method: str = 'procrustes') -> Dict:
-        """Compute alignment between two neural manifolds using various methods"""
-        if method == 'procrustes':
-            return self.compute_procrustes_alignment(X1, X2)
-        elif method == 'cca':
-            return self.compute_cca_alignment(X1, X2)
-        else:
-            raise ValueError(f"Unknown alignment method: {method}")
-    
-    def compute_procrustes_alignment(self, X1: np.array, X2: np.array) -> Dict:
-        """Procrustes analysis for manifold alignment"""
-        # Ensure same number of points
-        n_points = min(X1.shape[0], X2.shape[0])
-        X1_sub = X1[:n_points]
-        X2_sub = X2[:n_points]
-        
-        # Perform Procrustes analysis
-        mtx1, mtx2, disparity = procrustes(X1_sub, X2_sub)
-        
-        # Compute additional metrics
-        alignment_quality = 1 - disparity
-        
-        # Compute rotation matrix
-        H = X1_sub.T @ X2_sub
-        U, S, Vt = np.linalg.svd(H)
-        R = Vt.T @ U.T
-        
-        return {
-            'method': 'procrustes',
-            'disparity': disparity,
-            'alignment_quality': alignment_quality,
-            'rotation_matrix': R,
-            'aligned_X1': mtx1,
-            'aligned_X2': mtx2,
-            'singular_values': S
-        }
-    
-    def compute_cca_alignment(self, X1: np.array, X2: np.array) -> Dict:
-        """Canonical Correlation Analysis for manifold alignment"""
-        # Ensure same number of points
-        n_points = min(X1.shape[0], X2.shape[0])
-        X1_sub = X1[:n_points]
-        X2_sub = X2[:n_points]
-        
-        # Fit CCA
-        n_components = min(X1_sub.shape[1], X2_sub.shape[1], 5)
-        cca = CCA(n_components=n_components)
-        X1_c, X2_c = cca.fit_transform(X1_sub, X2_sub)
-        
-        # Compute canonical correlations
-        canonical_corrs = []
-        for i in range(n_components):
-            corr, _ = stats.pearsonr(X1_c[:, i], X2_c[:, i])
-            canonical_corrs.append(corr)
-        
-        return {
-            'method': 'cca',
-            'canonical_correlations': canonical_corrs,
-            'mean_correlation': np.mean(canonical_corrs),
-            'X1_canonical': X1_c,
-            'X2_canonical': X2_c
-        }
-    
-    def compute_geodesic_distances(self, X: np.array, k: int = 5) -> Dict:
-        """Compute geodesic distances on the neural manifold"""
-        # Use Isomap to compute geodesic distances
-        n_components = min(X.shape[1], 10)  # Limit components for efficiency
-        isomap = Isomap(n_neighbors=k, n_components=n_components)
-        isomap.fit(X)
-        
-        # Get geodesic distance matrix
-        geodesic_distances = isomap.dist_matrix_
-        
-        return {
-            'geodesic_distance_matrix': geodesic_distances,
-            'mean_geodesic_distance': np.mean(geodesic_distances),
-            'geodesic_variance': np.var(geodesic_distances)
-        }
-    
-    def compute_manifold_curvature(self, X: np.array, k: int = 5) -> np.array:
-        """Estimate local curvature of the neural manifold"""
-        nbrs = NearestNeighbors(n_neighbors=k+1).fit(X)
-        distances, indices = nbrs.kneighbors(X)
-        
-        curvatures = []
-        
-        for i in range(len(X)):
-            # Get local neighborhood
-            local_points = X[indices[i]]
-            
-            # Fit local PCA
-            local_pca = PCA(n_components=min(3, local_points.shape[1]))
-            local_pca.fit(local_points)
-            
-            # Curvature estimate based on explained variance ratio
-            explained_ratios = local_pca.explained_variance_ratio_
-            if len(explained_ratios) >= 2:
-                # Higher curvature when variance is more evenly distributed
-                curvature = 1 - explained_ratios[0]
-            else:
-                curvature = 0
-            
-            curvatures.append(curvature)
-        
-        return np.array(curvatures)
-    
-    def compute_information_geometry_metrics(self, X1: np.array, X2: np.array) -> Dict:
-        """Compute information geometry metrics between two neural distributions"""
-        # Use first two PCA components for computational efficiency
-        pca = PCA(n_components=2)
-        X1_pca = pca.fit_transform(X1)
-        X2_pca = pca.transform(X2)
-        
-        # Create KDE estimates
-        kde1 = gaussian_kde(X1_pca.T)
-        kde2 = gaussian_kde(X2_pca.T)
-        
-        # Create evaluation grid
-        x_min = min(X1_pca[:, 0].min(), X2_pca[:, 0].min())
-        x_max = max(X1_pca[:, 0].max(), X2_pca[:, 0].max())
-        y_min = min(X1_pca[:, 1].min(), X2_pca[:, 1].min())
-        y_max = max(X1_pca[:, 1].max(), X2_pca[:, 1].max())
-        
-        xx, yy = np.mgrid[x_min:x_max:20j, y_min:y_max:20j]
-        positions = np.vstack([xx.ravel(), yy.ravel()])
-        
-        # Evaluate densities
-        p1 = kde1(positions).reshape(xx.shape)
-        p2 = kde2(positions).reshape(xx.shape)
-        
-        # Normalize to ensure they're proper probability distributions
-        p1 = p1 / np.sum(p1)
-        p2 = p2 / np.sum(p2)
-        
-        # Compute information divergences
-        kl_div = self.compute_kl_divergence(p1.flatten(), p2.flatten())
-        js_div = self.compute_js_divergence(p1.flatten(), p2.flatten())
-        wasserstein_dist = self.compute_wasserstein_approximation(X1_pca, X2_pca)
-        
-        return {
-            'kl_divergence': kl_div,
-            'js_divergence': js_div,
-            'wasserstein_distance': wasserstein_dist,
-            'density_1': p1,
-            'density_2': p2,
-            'grid_x': xx,
-            'grid_y': yy
-        }
-    
-    def compute_kl_divergence(self, p: np.array, q: np.array, epsilon: float = 1e-10) -> float:
-        """Compute KL divergence between two probability distributions"""
-        p = p + epsilon  # Add small constant to avoid log(0)
-        q = q + epsilon
-        return np.sum(p * np.log(p / q))
-    
-    def compute_js_divergence(self, p: np.array, q: np.array) -> float:
-        """Compute Jensen-Shannon divergence between two probability distributions"""
-        m = 0.5 * (p + q)
-        return 0.5 * self.compute_kl_divergence(p, m) + 0.5 * self.compute_kl_divergence(q, m)
-    
-    def compute_wasserstein_approximation(self, X1: np.array, X2: np.array) -> float:
-        """Compute approximation of Wasserstein distance using sample means"""
-        # Simple approximation: distance between sample means
-        mean1 = np.mean(X1, axis=0)
-        mean2 = np.mean(X2, axis=0)
-        return np.linalg.norm(mean1 - mean2)
+    # NOTE: Geometry utility functions are now imported from geometry_utils module
+    # to eliminate code duplication. The following functions are available:
+    # - compute_manifold_alignment()
+    # - compute_procrustes_alignment() 
+    # - compute_cca_alignment()
+    # - compute_geodesic_distances()
+    # - compute_manifold_curvature()
+    # - compute_information_geometry_metrics()
+    # - compute_kl_divergence()
+    # - compute_js_divergence()
+    # - compute_wasserstein_approximation()
     
     def run_advanced_geometry_analysis(self, neural_data: np.array,
                                      condition_labels: np.array,
@@ -804,25 +659,25 @@ class DelayDiscountingGeometryAnalyzer:
             print("  Computing manifold alignment...")
             # Manifold alignment
             results['manifold_alignment'] = {
-                'procrustes': self.compute_manifold_alignment(X1, X2, method='procrustes'),
-                'cca': self.compute_manifold_alignment(X1, X2, method='cca')
+                'procrustes': compute_manifold_alignment(X1, X2, method='procrustes'),
+                'cca': compute_manifold_alignment(X1, X2, method='cca')
             }
             
             print("  Computing information geometry metrics...")
             # Information geometry metrics
-            results['information_geometry'] = self.compute_information_geometry_metrics(X1, X2)
+            results['information_geometry'] = compute_information_geometry_metrics(X1, X2)
             
             print("  Computing geodesic distances...")
             # Geodesic distance analysis
             results['geodesic_analysis'] = {
-                'condition_1': self.compute_geodesic_distances(X1),
-                'condition_2': self.compute_geodesic_distances(X2)
+                'condition_1': compute_geodesic_distances(X1),
+                'condition_2': compute_geodesic_distances(X2)
             }
             
             print("  Computing manifold curvature...")
             # Manifold curvature
-            curvature_1 = self.compute_manifold_curvature(X1)
-            curvature_2 = self.compute_manifold_curvature(X2)
+            curvature_1 = compute_manifold_curvature(X1)
+            curvature_2 = compute_manifold_curvature(X2)
             
             results['curvature_analysis'] = {
                 'condition_1': {
@@ -839,6 +694,356 @@ class DelayDiscountingGeometryAnalyzer:
         
         return results
     
+    def create_delay_trajectory_analysis(self, data: Dict, 
+                                       min_trials_per_delay: int = 5) -> Dict:
+        """
+        Create delay_results structure for geometric transformation analysis
+        
+        Parameters:
+        -----------
+        data : dict
+            Data loaded from load_delay_discounting_data
+        min_trials_per_delay : int
+            Minimum number of trials required per delay condition
+            
+        Returns:
+        --------
+        dict : delay_results structure for geometric transformation analysis
+        """
+        behavioral_data = data['behavioral_data']
+        neural_data = data['neural_data']
+        
+        if 'delay_days' not in behavioral_data.columns:
+            raise ValueError("Behavioral data must contain 'delay_days' column")
+        
+        delays = behavioral_data['delay_days'].values
+        unique_delays = np.unique(delays)
+        
+        # Filter delays with sufficient trials
+        valid_delays = []
+        delay_patterns = {}
+        
+        for delay in unique_delays:
+            delay_mask = delays == delay
+            n_trials = np.sum(delay_mask)
+            
+            if n_trials >= min_trials_per_delay:
+                valid_delays.append(delay)
+                
+                # Get neural patterns for this delay
+                delay_neural_data = neural_data[delay_mask]
+                
+                # Apply PCA for embedding
+                embedding, reducer = self.dimensionality_reduction(
+                    delay_neural_data, method='pca', n_components=10
+                )
+                
+                delay_patterns[delay] = {
+                    'patterns': embedding,
+                    'n_trials': n_trials,
+                    'neural_data': delay_neural_data
+                }
+        
+        if len(valid_delays) < 3:
+            raise ValueError(f"Need at least 3 delay conditions, found {len(valid_delays)}")
+        
+        # Sort delays for trajectory analysis
+        valid_delays.sort()
+        
+        return {
+            'delays': valid_delays,
+            'embeddings': delay_patterns,
+            'roi_name': data['roi_name'],
+            'total_trials': len(delays),
+            'delay_distribution': {delay: np.sum(delays == delay) for delay in unique_delays}
+        }
+    
+    def run_trajectory_analysis(self, data: Dict, 
+                              save_visualizations: bool = True) -> Dict:
+        """
+        Run comprehensive geometric transformation trajectory analysis
+        
+        Parameters:
+        -----------
+        data : dict
+            Data loaded from load_delay_discounting_data
+        save_visualizations : bool
+            Whether to create and save trajectory visualizations
+            
+        Returns:
+        --------
+        dict : Trajectory analysis results
+        """
+        print("Creating delay trajectory analysis structure...")
+        
+        try:
+            delay_results = self.create_delay_trajectory_analysis(data)
+        except ValueError as e:
+            print(f"Cannot run trajectory analysis: {e}")
+            return {'error': str(e)}
+        
+        delays = delay_results['delays']
+        embeddings = delay_results['embeddings']
+        roi_name = delay_results['roi_name']
+        
+        print(f"Trajectory analysis for {roi_name} with {len(delays)} delay conditions")
+        print(f"Delays: {delays}")
+        
+        results = {
+            'delay_results': delay_results,
+            'trajectory_metrics': {}
+        }
+        
+        # 1. Centroid trajectory analysis
+        print("  Computing centroid trajectories...")
+        centroids = []
+        for delay in delays:
+            patterns = embeddings[delay]['patterns']
+            centroid = np.mean(patterns, axis=0)
+            centroids.append(centroid)
+        
+        centroids = np.array(centroids)
+        
+        # Compute trajectory velocity (rate of change between consecutive delays)
+        velocities = []
+        for i in range(len(centroids) - 1):
+            velocity = np.linalg.norm(centroids[i+1] - centroids[i])
+            velocities.append(velocity)
+        
+        results['trajectory_metrics']['centroids'] = centroids
+        results['trajectory_metrics']['velocities'] = velocities
+        results['trajectory_metrics']['mean_velocity'] = np.mean(velocities)
+        results['trajectory_metrics']['velocity_variability'] = np.std(velocities)
+        
+        # 2. Pairwise manifold alignment analysis
+        print("  Computing pairwise manifold alignments...")
+        alignment_matrix = np.zeros((len(delays), len(delays)))
+        
+        for i, delay1 in enumerate(delays):
+            for j, delay2 in enumerate(delays):
+                if i != j:
+                    X1 = embeddings[delay1]['patterns']
+                    X2 = embeddings[delay2]['patterns']
+                    
+                    # Use procrustes alignment
+                    alignment = compute_manifold_alignment(X1, X2, method='procrustes')
+                    alignment_matrix[i, j] = alignment['alignment_quality']
+                    
+                    # Also try regression alignment (unique to geometric_transformation_analysis)
+                    if i == 0 and j == 1:  # Just for first pair as example
+                        reg_alignment = compute_regression_alignment(X1, X2)
+                        results['trajectory_metrics']['regression_alignment_example'] = reg_alignment
+                else:
+                    alignment_matrix[i, j] = 1.0
+        
+        results['trajectory_metrics']['alignment_matrix'] = alignment_matrix
+        results['trajectory_metrics']['mean_alignment_quality'] = np.mean(alignment_matrix[alignment_matrix < 1.0])
+        
+        # 3. Information geometry across delays
+        print("  Computing information geometry metrics...")
+        js_divergences = []
+        wasserstein_distances = []
+        
+        for i in range(len(delays) - 1):
+            X1 = embeddings[delays[i]]['patterns']
+            X2 = embeddings[delays[i+1]]['patterns']
+            
+            info_metrics = compute_information_geometry_metrics(X1, X2)
+            js_divergences.append(info_metrics['js_divergence'])
+            wasserstein_distances.append(info_metrics['wasserstein_distance'])
+        
+        results['trajectory_metrics']['js_divergences'] = js_divergences
+        results['trajectory_metrics']['wasserstein_distances'] = wasserstein_distances
+        results['trajectory_metrics']['mean_js_divergence'] = np.mean(js_divergences)
+        results['trajectory_metrics']['mean_wasserstein_distance'] = np.mean(wasserstein_distances)
+        
+        # 4. Curvature evolution
+        print("  Computing manifold curvature evolution...")
+        mean_curvatures = []
+        curvature_variances = []
+        
+        for delay in delays:
+            patterns = embeddings[delay]['patterns']
+            curvatures = compute_manifold_curvature(patterns)
+            mean_curvatures.append(np.mean(curvatures))
+            curvature_variances.append(np.var(curvatures))
+        
+        results['trajectory_metrics']['mean_curvatures'] = mean_curvatures
+        results['trajectory_metrics']['curvature_variances'] = curvature_variances
+        results['trajectory_metrics']['curvature_evolution_slope'] = np.polyfit(delays, mean_curvatures, 1)[0]
+        
+        # 5. Effective dimensionality evolution
+        print("  Computing dimensionality evolution...")
+        effective_dims = []
+        
+        for delay in delays:
+            patterns = embeddings[delay]['patterns']
+            pca = PCA()
+            pca.fit(patterns)
+            
+            # Compute effective dimensionality (participation ratio)
+            eigenvals = pca.explained_variance_
+            effective_dim = (np.sum(eigenvals)**2) / np.sum(eigenvals**2)
+            effective_dims.append(effective_dim)
+        
+        results['trajectory_metrics']['effective_dimensions'] = effective_dims
+        results['trajectory_metrics']['dimensionality_evolution_slope'] = np.polyfit(delays, effective_dims, 1)[0]
+        
+        # 6. Create custom trajectory visualizations 
+        if save_visualizations:
+            print("  Creating trajectory visualizations...")
+            save_path = self.output_dir / "trajectory_visualizations"
+            save_path.mkdir(exist_ok=True)
+            
+            try:
+                self._create_trajectory_visualizations(delay_results, results['trajectory_metrics'], str(save_path))
+                results['visualization_path'] = str(save_path / f"{roi_name}_trajectory_analysis.png")
+            except Exception as e:
+                print(f"    Warning: Visualization failed: {e}")
+                results['visualization_error'] = str(e)
+        
+        return results
+    
+    def run_comprehensive_trajectory_analysis(self, data: Dict) -> Dict:
+        """
+        Run both standard delay discounting analysis AND trajectory analysis
+        
+        Returns combined results from both analysis types
+        """
+        print("="*60)
+        print("COMPREHENSIVE DELAY DISCOUNTING + TRAJECTORY ANALYSIS")
+        print("="*60)
+        
+        # 1. Run standard delay discounting analysis
+        print("\n1. Running standard delay discounting geometry analysis...")
+        standard_results = self.run_comprehensive_dd_analysis(data)
+        
+        # 2. Run trajectory analysis
+        print("\n2. Running trajectory analysis...")
+        trajectory_results = self.run_trajectory_analysis(data)
+        
+        # 3. Combine results
+        combined_results = {
+            'roi_name': data['roi_name'],
+            'analysis_type': 'comprehensive_dd_trajectory',
+            'standard_comparisons': standard_results,
+            'trajectory_analysis': trajectory_results,
+            'summary': self._create_trajectory_summary(standard_results, trajectory_results)
+        }
+        
+        return combined_results
+    
+    def _create_trajectory_summary(self, standard_results: Dict, trajectory_results: Dict) -> Dict:
+        """Create a summary combining both analysis types"""
+        summary = {
+            'n_standard_comparisons': len(standard_results),
+            'standard_comparisons_list': list(standard_results.keys())
+        }
+        
+        if 'error' not in trajectory_results:
+            traj_metrics = trajectory_results['trajectory_metrics']
+            summary.update({
+                'n_delay_conditions': len(trajectory_results['delay_results']['delays']),
+                'delay_range': f"{min(trajectory_results['delay_results']['delays'])}-{max(trajectory_results['delay_results']['delays'])} days",
+                'mean_trajectory_velocity': traj_metrics['mean_velocity'],
+                'mean_alignment_quality': traj_metrics['mean_alignment_quality'],
+                'curvature_evolution_trend': 'increasing' if traj_metrics['curvature_evolution_slope'] > 0 else 'decreasing',
+                'dimensionality_evolution_trend': 'increasing' if traj_metrics['dimensionality_evolution_slope'] > 0 else 'decreasing'
+            })
+        else:
+            summary['trajectory_analysis_error'] = trajectory_results['error']
+        
+        return summary
+    
+    def _create_trajectory_visualizations(self, delay_results: Dict, trajectory_metrics: Dict, save_path: str):
+        """Create custom trajectory visualizations"""
+        delays = delay_results['delays']
+        embeddings = delay_results['embeddings']
+        roi_name = delay_results['roi_name']
+        
+        # Create figure with multiple subplots
+        fig = plt.figure(figsize=(20, 16))
+        
+        # 1. 3D trajectory of centroids
+        ax1 = fig.add_subplot(2, 3, 1, projection='3d')
+        
+        centroids = trajectory_metrics['centroids']
+        
+        # Plot trajectory
+        ax1.plot(centroids[:, 0], centroids[:, 1], centroids[:, 2], 
+                 'o-', linewidth=3, markersize=8)
+        
+        # Color code by delay
+        colors = plt.cm.viridis(np.linspace(0, 1, len(delays)))
+        for i, (delay, color) in enumerate(zip(delays, colors)):
+            ax1.scatter(centroids[i, 0], centroids[i, 1], centroids[i, 2], 
+                       c=[color], s=100, label=f'{delay}d')
+        
+        ax1.set_xlabel('PC1')
+        ax1.set_ylabel('PC2')
+        ax1.set_zlabel('PC3')
+        ax1.set_title(f'{roi_name}: Centroid Trajectory')
+        ax1.legend()
+        
+        # 2. Manifold curvature across delays
+        ax2 = fig.add_subplot(2, 3, 2)
+        
+        mean_curvatures = trajectory_metrics['mean_curvatures']
+        ax2.plot(delays, mean_curvatures, 'o-', linewidth=2, markersize=8)
+        ax2.set_xlabel('Delay (days)')
+        ax2.set_ylabel('Mean Curvature')
+        ax2.set_title('Manifold Curvature vs Delay')
+        ax2.grid(True, alpha=0.3)
+        
+        # 3. Pairwise alignment quality heatmap
+        ax3 = fig.add_subplot(2, 3, 3)
+        
+        alignment_matrix = trajectory_metrics['alignment_matrix']
+        im = ax3.imshow(alignment_matrix, cmap='viridis', vmin=0, vmax=1)
+        ax3.set_xticks(range(len(delays)))
+        ax3.set_yticks(range(len(delays)))
+        ax3.set_xticklabels([f'{d}d' for d in delays])
+        ax3.set_yticklabels([f'{d}d' for d in delays])
+        ax3.set_title('Pairwise Alignment Quality')
+        plt.colorbar(im, ax=ax3)
+        
+        # 4. Information geometry metrics
+        ax4 = fig.add_subplot(2, 3, 4)
+        
+        js_divergences = trajectory_metrics['js_divergences']
+        delay_pairs = [f'{delays[i]}-{delays[i+1]}' for i in range(len(delays)-1)]
+        ax4.bar(range(len(js_divergences)), js_divergences)
+        ax4.set_xticks(range(len(delay_pairs)))
+        ax4.set_xticklabels(delay_pairs, rotation=45)
+        ax4.set_ylabel('JS Divergence')
+        ax4.set_title('Information Distance Between Consecutive Delays')
+        
+        # 5. Trajectory velocity
+        ax5 = fig.add_subplot(2, 3, 5)
+        
+        velocities = trajectory_metrics['velocities']
+        if len(velocities) > 0:
+            ax5.plot(delays[1:], velocities, 'o-', linewidth=2, markersize=8, color='red')
+            ax5.set_xlabel('Delay (days)')
+            ax5.set_ylabel('Centroid Velocity')
+            ax5.set_title('Rate of Geometric Change')
+            ax5.grid(True, alpha=0.3)
+        
+        # 6. Dimensionality evolution
+        ax6 = fig.add_subplot(2, 3, 6)
+        
+        effective_dims = trajectory_metrics['effective_dimensions']
+        ax6.plot(delays, effective_dims, 'o-', linewidth=2, markersize=8, color='purple')
+        ax6.set_xlabel('Delay (days)')
+        ax6.set_ylabel('Effective Dimensionality')
+        ax6.set_title('Representational Dimensionality vs Delay')
+        ax6.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(f'{save_path}/{roi_name}_trajectory_analysis.png', 
+                    dpi=300, bbox_inches='tight')
+        plt.close()
+
     def create_summary_report(self, all_results: Dict, data: Dict) -> str:
         """Create a comprehensive summary report"""
         report = []
@@ -886,16 +1091,63 @@ class DelayDiscountingGeometryAnalyzer:
     
     def save_all_results(self, all_results: Dict, data: Dict):
         """Save all results and create summary report"""
-        # Save individual results
-        for comparison_name, results in all_results.items():
-            self.save_results(results, f"{data['roi_name']}_{comparison_name}_results.json")
         
-        # Create advanced geometry visualizations
-        print("\nCreating advanced geometry visualizations...")
-        self.visualize_advanced_geometry_results(all_results, data['roi_name'])
+        # Handle different result structures (standard vs comprehensive)
+        if 'analysis_type' in all_results and all_results['analysis_type'] == 'comprehensive_dd_trajectory':
+            # Comprehensive analysis results structure
+            
+            # Save standard comparisons
+            if 'standard_comparisons' in all_results:
+                standard_results = all_results['standard_comparisons']
+                for comparison_name, results in standard_results.items():
+                    if isinstance(results, dict):  # Ensure it's a dict
+                        self.save_results(results, f"{data['roi_name']}_{comparison_name}_results.json")
+                
+                # Create advanced geometry visualizations for standard results
+                print("\nCreating advanced geometry visualizations...")
+                self.visualize_advanced_geometry_results(standard_results, data['roi_name'])
+                
+                # Create summary report for standard results
+                summary_report = self.create_summary_report(standard_results, data)
+                
+            # Save trajectory analysis results
+            if 'trajectory_analysis' in all_results:
+                trajectory_results = all_results['trajectory_analysis']
+                if isinstance(trajectory_results, dict) and 'error' not in trajectory_results:
+                    self.save_results(trajectory_results, f"{data['roi_name']}_trajectory_analysis_results.json")
+                    
+                    # Add trajectory summary to report
+                    summary_report += "\n\n" + "="*60 + "\n"
+                    summary_report += "TRAJECTORY ANALYSIS SUMMARY\n"
+                    summary_report += "="*60 + "\n"
+                    
+                    if 'summary' in all_results:
+                        traj_summary = all_results['summary']
+                        if 'n_delay_conditions' in traj_summary:
+                            summary_report += f"Delay conditions: {traj_summary['n_delay_conditions']}\n"
+                            summary_report += f"Delay range: {traj_summary['delay_range']}\n"
+                            summary_report += f"Mean trajectory velocity: {traj_summary['mean_trajectory_velocity']:.3f}\n"
+                            summary_report += f"Mean alignment quality: {traj_summary['mean_alignment_quality']:.3f}\n"
+                        else:
+                            summary_report += f"Trajectory analysis error: {traj_summary.get('trajectory_analysis_error', 'Unknown error')}\n"
+            
+            # Save comprehensive results
+            self.save_results(all_results, f"{data['roi_name']}_comprehensive_results.json")
+            
+        else:
+            # Standard analysis results structure
+            for comparison_name, results in all_results.items():
+                if isinstance(results, dict):  # Ensure it's a dict
+                    self.save_results(results, f"{data['roi_name']}_{comparison_name}_results.json")
+            
+            # Create advanced geometry visualizations
+            print("\nCreating advanced geometry visualizations...")
+            self.visualize_advanced_geometry_results(all_results, data['roi_name'])
+            
+            # Create and save summary report
+            summary_report = self.create_summary_report(all_results, data)
         
-        # Create and save summary report
-        summary_report = self.create_summary_report(all_results, data)
+        # Save summary report
         report_file = self.output_dir / f"{data['roi_name']}_summary_report.txt"
         with open(report_file, 'w') as f:
             f.write(summary_report)
@@ -905,29 +1157,45 @@ class DelayDiscountingGeometryAnalyzer:
         print(summary_report)
     
     def save_results(self, results: Dict, filename: str):
-        """Save results to JSON file"""
-        serializable_results = {}
+        """Save results to JSON file with improved numpy array handling"""
         
-        for key, value in results.items():
-            if isinstance(value, dict):
-                serializable_results[key] = {}
-                for subkey, subvalue in value.items():
-                    if isinstance(subvalue, np.ndarray):
-                        serializable_results[key][subkey] = subvalue.tolist()
-                    elif hasattr(subvalue, '__dict__'):
-                        continue
-                    else:
-                        serializable_results[key][subkey] = subvalue
-            elif isinstance(value, np.ndarray):
-                serializable_results[key] = value.tolist()
-            elif hasattr(value, '__dict__'):
-                continue
+        def make_serializable(obj):
+            """Recursively convert numpy arrays and other non-serializable objects"""
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, dict):
+                return {key: make_serializable(value) for key, value in obj.items()}
+            elif isinstance(obj, (list, tuple)):
+                return [make_serializable(item) for item in obj]
+            elif hasattr(obj, '__dict__') and not isinstance(obj, (int, float, str, bool, type(None))):
+                # Skip objects with __dict__ (like sklearn objects)
+                return f"<{obj.__class__.__name__} object - not serializable>"
+            elif isinstance(obj, (np.integer, np.floating)):
+                return obj.item()  # Convert numpy scalars to Python scalars
             else:
-                serializable_results[key] = value
+                return obj
         
-        output_file = self.output_dir / filename
-        with open(output_file, 'w') as f:
-            json.dump(serializable_results, f, indent=2)
+        try:
+            serializable_results = make_serializable(results)
+            output_file = self.output_dir / filename
+            with open(output_file, 'w') as f:
+                json.dump(serializable_results, f, indent=2)
+        except Exception as e:
+            print(f"Warning: Could not save {filename}: {e}")
+            # Save a simplified version
+            simplified_results = {}
+            for key, value in results.items():
+                try:
+                    simplified_results[key] = make_serializable(value)
+                except:
+                    simplified_results[key] = f"<Could not serialize {type(value).__name__}>"
+            
+            try:
+                output_file = self.output_dir / filename
+                with open(output_file, 'w') as f:
+                    json.dump(simplified_results, f, indent=2)
+            except Exception as e2:
+                print(f"Error: Could not save even simplified results for {filename}: {e2}")
     
     def visualize_advanced_geometry_results(self, all_results: Dict, roi_name: str = "ROI"):
         """Create advanced visualizations of geometric transformation results"""
@@ -1048,12 +1316,27 @@ class DelayDiscountingGeometryAnalyzer:
                 # Get condition labels for coloring
                 if 'comparison_info' in comparison_results:
                     labels = comparison_results['comparison_info']['labels']
-                    unique_labels = np.unique(labels[labels != -1])
+                    
+                    # Handle filtered data - only use included trials
+                    if np.any(labels == -1):
+                        # Some trials were excluded - filter both embedding and labels
+                        included_mask = labels != -1
+                        filtered_labels = labels[included_mask]
+                        # embedding should already be filtered, so use it as is
+                        if len(filtered_labels) != len(embedding):
+                            print(f"Warning: Label/embedding mismatch for {comparison_name}")
+                            continue
+                        labels_to_use = filtered_labels
+                    else:
+                        # No trials excluded
+                        labels_to_use = labels
+                    
+                    unique_labels = np.unique(labels_to_use[labels_to_use != -1])
                     
                     colors = ['red', 'blue', 'green', 'purple']
                     for i, label in enumerate(unique_labels):
-                        mask = labels == label
-                        if np.any(mask):
+                        mask = labels_to_use == label
+                        if np.any(mask) and np.sum(mask) <= len(embedding):
                             ax5.scatter(embedding[mask, 0], embedding[mask, 1], 
                                       c=colors[i % len(colors)], alpha=0.6, 
                                       label=f'Condition {label}', s=30)
@@ -1153,8 +1436,8 @@ def generate_example_dd_data():
     return neural_data, behavioral_data
 
 def main():
-    """Main function for delay discounting geometry analysis"""
-    parser = argparse.ArgumentParser(description="Delay Discounting Neural Geometry Analysis")
+    """Main function for delay discounting geometry analysis with trajectory analysis support"""
+    parser = argparse.ArgumentParser(description="Delay Discounting Neural Geometry Analysis with Trajectory Support")
     parser.add_argument("--neural-data", help="Path to neural data file")
     parser.add_argument("--behavioral-data", help="Path to behavioral data CSV")
     parser.add_argument("--roi-name", default="ROI", help="Name of the ROI")
@@ -1166,6 +1449,16 @@ def main():
                                'sv_chosen_median', 'sv_unchosen_median', 'sv_difference_median',
                                'value_diff_terciles'])
     parser.add_argument("--example", action="store_true", help="Run with example data")
+    
+    # NEW: Trajectory analysis options
+    parser.add_argument("--trajectory", action="store_true", 
+                       help="Run trajectory analysis (requires delay_days column)")
+    parser.add_argument("--comprehensive", action="store_true", 
+                       help="Run both standard and trajectory analysis")
+    parser.add_argument("--min-trials-per-delay", type=int, default=5,
+                       help="Minimum trials per delay for trajectory analysis")
+    parser.add_argument("--trajectory-only", action="store_true",
+                       help="Run only trajectory analysis, skip standard comparisons")
     
     args = parser.parse_args()
     
@@ -1210,13 +1503,69 @@ def main():
             args.roi_name
         )
     
-    # Run comprehensive analysis
-    all_results = analyzer.run_comprehensive_dd_analysis(data, args.comparisons)
+    # Determine analysis type
+    if args.comprehensive:
+        # Run both standard and trajectory analysis
+        print("🚀 Running COMPREHENSIVE analysis (standard + trajectory)...")
+        all_results = analyzer.run_comprehensive_trajectory_analysis(data)
+        
+    elif args.trajectory_only:
+        # Run only trajectory analysis
+        print("🎯 Running TRAJECTORY-ONLY analysis...")
+        all_results = analyzer.run_trajectory_analysis(data)
+        
+    elif args.trajectory:
+        # Run standard analysis + trajectory analysis separately
+        print("📊 Running STANDARD analysis...")
+        standard_results = analyzer.run_comprehensive_dd_analysis(data, args.comparisons)
+        
+        print("\n🎯 Running TRAJECTORY analysis...")
+        trajectory_results = analyzer.run_trajectory_analysis(data)
+        
+        all_results = {
+            'standard_analysis': standard_results,
+            'trajectory_analysis': trajectory_results
+        }
+        
+    else:
+        # Run standard analysis only
+        print("📊 Running STANDARD delay discounting analysis...")
+        all_results = analyzer.run_comprehensive_dd_analysis(data, args.comparisons)
     
     # Save results and create report
-    analyzer.save_all_results(all_results, data)
+    if args.trajectory_only:
+        # Special handling for trajectory-only results
+        if 'error' not in all_results:
+            traj_file = analyzer.output_dir / f"{data['roi_name']}_trajectory_results.json"
+            analyzer.save_results(all_results, traj_file.name)
+            print(f"Trajectory results saved to: {traj_file}")
+        else:
+            print(f"Trajectory analysis failed: {all_results['error']}")
+    else:
+        analyzer.save_all_results(all_results, data)
     
-    print(f"\nAnalysis complete! Results saved to: {analyzer.output_dir}")
+    print(f"\n✅ Analysis complete! Results saved to: {analyzer.output_dir}")
+    
+    # Print summary of what was run
+    if args.comprehensive:
+        print("\n📋 ANALYSIS SUMMARY:")
+        if 'summary' in all_results:
+            summary = all_results['summary']
+            print(f"   Standard comparisons: {summary['n_standard_comparisons']}")
+            if 'n_delay_conditions' in summary:
+                print(f"   Trajectory conditions: {summary['n_delay_conditions']}")
+                print(f"   Delay range: {summary['delay_range']}")
+        
+    elif args.trajectory or args.trajectory_only:
+        if 'error' not in all_results and 'trajectory_metrics' in all_results:
+            traj_metrics = all_results['trajectory_metrics']
+            print("\n🎯 TRAJECTORY ANALYSIS SUMMARY:")
+            print(f"   Mean velocity: {traj_metrics['mean_velocity']:.3f}")
+            print(f"   Mean alignment quality: {traj_metrics['mean_alignment_quality']:.3f}")
+            print(f"   Curvature trend: {traj_metrics['curvature_evolution_slope']:.3f}")
+    
+    print(f"\n🎉 Use --comprehensive for the most complete analysis!")
+    print(f"💡 Trajectory analysis provides 3D visualizations and geometric dynamics!")
 
 if __name__ == "__main__":
     main() 

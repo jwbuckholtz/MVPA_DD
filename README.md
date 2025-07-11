@@ -88,9 +88,35 @@ The pipeline fits hyperbolic discounting models to choice data:
 
 ### Geometry Analysis Scripts
 
-- `delay_discounting_geometry_analysis.py` - Specialized delay discounting geometry analysis
-- `geometric_transformation_analysis.py` - Advanced geometric transformation methods
-- `dd_geometry_config.json` - Configuration for geometry analyses
+The pipeline includes **three streamlined geometry analysis implementations** for different use cases:
+
+#### **Core Integration**
+- `delay_discounting_mvpa_pipeline.py` - **Main pipeline with integrated geometry analysis**
+  - **Use when**: Running complete MVPA pipeline with geometry components
+  - **Features**: Basic geometry analysis integrated into main workflow
+  - **Best for**: Standard analysis workflows, production runs
+
+#### **Standalone Tools**  
+- `delay_discounting_geometry_analysis.py` - **Comprehensive delay discounting geometry analysis** (ENHANCED!)
+  - **Use when**: Specialized delay discounting geometry research and advanced trajectory analysis
+  - **Features**: Standard geometry + advanced trajectory analysis, manifold alignment, information geometry, comprehensive visualizations
+  - **Command Options**: `--example`, `--trajectory-only`, `--comprehensive`, `--trajectory`
+  - **Best for**: Delay discounting research, trajectory analysis, comprehensive geometry studies
+
+- `geometry_analysis.py` - **Modern refactored geometry class** (NEW!)
+  - **Use when**: Building new analysis scripts or need clean interfaces
+  - **Features**: Inherits from BaseAnalysis, standardized error handling, comprehensive logging
+  - **Best for**: New development, integration with analysis framework
+
+#### **Utility Libraries**
+- `geometry_utils.py` - **Consolidated geometry functions library** (NEW!)
+  - **Purpose**: Centralized collection of geometric analysis functions
+  - **Features**: Manifold alignment, information geometry metrics, trajectory analysis, geodesic distances
+  - **Used by**: All geometry analysis implementations
+  - **Best for**: Function reuse, avoiding code duplication
+
+#### **Configuration**
+- `dd_geometry_config.json` - Configuration for geometry analyses (⚠️ **Legacy** - use `config.yaml` for new projects)
 
 ### Utility Modules
 
@@ -385,22 +411,42 @@ python run_tests.py --verbose --tb=long
 
 See `TESTING_GUIDE.md` for comprehensive documentation.
 
-### 9. Neural Geometry Analysis (Optional)
+### 9. Neural Geometry Analysis 
 
-#### Run Specialized Delay Discounting Geometry Analysis
+The pipeline offers **three streamlined approaches** to neural geometry analysis. Choose based on your research needs:
+
+#### **Approach 1: Integrated Pipeline Geometry** (Most Common)
+**Use when**: Running standard MVPA analysis with basic geometry components
 ```bash
-# For extracted ROI data
-python delay_discounting_geometry_analysis.py \
-    --neural-data roi_timeseries.npy \
-    --behavioral-data trial_data.csv \
-    --roi-name "DLPFC" \
-    --config dd_geometry_config.json
+# Geometry analysis runs automatically as part of main pipeline
+python delay_discounting_mvpa_pipeline.py
 
-# Test with example data
-python delay_discounting_geometry_analysis.py --example
+# Results in: delay_discounting_results/geometry_analysis/
 ```
 
-#### Available Geometry Comparisons
+#### **Approach 2: Comprehensive Delay Discounting Analysis** (Research Focus - ENHANCED!)
+**Use when**: Deep-dive into delay discounting geometry with advanced trajectory analysis
+```bash
+# Standard geometry analysis only
+python delay_discounting_geometry_analysis.py --example
+
+# Advanced trajectory analysis only
+python delay_discounting_geometry_analysis.py --example --trajectory-only
+
+# Comprehensive analysis (standard + trajectory)
+python delay_discounting_geometry_analysis.py --example --comprehensive
+
+# Standard analysis with trajectory as additional output
+python delay_discounting_geometry_analysis.py --example --trajectory
+```
+
+**Available Analysis Types**:
+- **Standard Geometry**: Choice comparisons, delay analysis, subjective value analysis
+- **Trajectory Analysis**: Manifold alignment, centroid trajectories, curvature evolution
+- **Information Geometry**: KL divergence, JS divergence, Wasserstein distance
+- **Advanced Visualizations**: 6-panel trajectory plots, 3D manifold visualizations
+
+**Specialized Comparisons**:
 - `choice` - Sooner-smaller vs larger-later choices
 - `delay_short_vs_long` - Short vs long delays  
 - `delay_immediate_vs_delayed` - Immediate vs delayed trials
@@ -408,6 +454,59 @@ python delay_discounting_geometry_analysis.py --example
 - `sv_unchosen_median` - High vs low unchosen option values
 - `sv_difference_median` - High vs low subjective value differences
 - `value_diff_terciles` - Similar vs different option values (choice difficulty)
+
+#### **Approach 3: Modern Analysis Framework** (New Development)
+**Use when**: Building new analysis scripts or need clean, standardized interfaces
+```python
+from geometry_analysis import GeometryAnalysis
+from analysis_base import AnalysisFactory
+
+# Create geometry analysis instance
+geometry_analysis = AnalysisFactory.create('geometry', config=config)
+
+# Run analysis for multiple subjects
+results = geometry_analysis.run_analysis(subjects=['sub001', 'sub002'])
+
+# Process single subject with custom parameters
+result = geometry_analysis.process_subject('sub001', 
+                                         roi_names=['striatum', 'dlpfc'],
+                                         comparison_types=['choice', 'delay'])
+```
+
+#### **Geometry Utilities Library** (Supporting Functions)
+**Use when**: Building custom analysis scripts or extending functionality
+```python
+from geometry_utils import (
+    compute_manifold_alignment,
+    compute_information_geometry_metrics,
+    compute_geodesic_distances,
+    analyze_trajectory_dynamics
+)
+
+# Manifold alignment between conditions
+alignment_results = compute_manifold_alignment(X1, X2, method='procrustes')
+
+# Information geometry metrics
+info_metrics = compute_information_geometry_metrics(X1, X2)
+
+# Geodesic distance analysis
+geodesic_distances = compute_geodesic_distances(neural_data, k=5)
+
+# Trajectory dynamics analysis
+trajectory_results = analyze_trajectory_dynamics(embeddings, conditions)
+```
+
+#### **When to Use Each Approach**
+
+| Research Goal | Recommended Approach | File to Use |
+|--------------|---------------------|-------------|
+| **Standard MVPA with basic geometry** | Integrated Pipeline | `delay_discounting_mvpa_pipeline.py` |
+| **Delay discounting geometry research** | Comprehensive DD Analysis | `delay_discounting_geometry_analysis.py` |
+| **Advanced trajectory analysis** | Comprehensive DD Analysis | `delay_discounting_geometry_analysis.py --trajectory` |
+| **New analysis development** | Modern Framework | `geometry_analysis.py` |
+| **Custom geometric methods** | Utilities Library | `geometry_utils.py` |
+| **Production analysis workflows** | Integrated Pipeline | `delay_discounting_mvpa_pipeline.py` |
+| **Comprehensive geometry studies** | Comprehensive DD Analysis | `delay_discounting_geometry_analysis.py --comprehensive` |
 
 ## Output Structure
 
