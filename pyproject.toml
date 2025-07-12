@@ -1,0 +1,34 @@
+[project]
+name = "mvpa-dd"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "ipykernel>=6.29.5",
+    "joblib>=1.5.1",
+    "matplotlib>=3.10.3",
+    "nibabel>=5.3.2",
+    "nilearn>=0.12.0",
+    "numpy>=2.3.1",
+    "pandas>=2.3.1",
+    "scikit-learn>=1.7.0",
+    "scipy>=1.16.0",
+    "seaborn>=0.13.2",
+    "statsmodels>=0.14.5",
+]
+
+[tool.ruff]
+extend-include = ["*.ipynb"]
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ruff.lint]
+extend-select = ["E501", "W", "N", "R", "I"]
+
+# I want it to ignore F401 because that will delete unused library imports
+# Annoying if Ruff runs on file save (if you haven't had a 
+# chance to use the library yet.
+[tool.ruff]
+ignore = ["F401"]
