@@ -1,3 +1,14 @@
 cursor_running_fmri_decoding_and_mvpa_a.md
 delay_geometry_analysis.py
 .DS_Store
+
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
