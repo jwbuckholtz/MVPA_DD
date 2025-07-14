@@ -58,8 +58,9 @@ try:
     MEMORY_EFFICIENT_AVAILABLE = True
 except ImportError:
     MEMORY_EFFICIENT_AVAILABLE = False
-    MemoryConfig = None
-    MemoryEfficientDataLoader = None
+    # Create placeholder types for type hints
+    MemoryConfig = type(None)
+    MemoryEfficientDataLoader = type(None)
 
 
 class AnalysisError(Exception):
