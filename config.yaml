@@ -1,0 +1,276 @@
+study:
+  name: Delay Discounting MVPA Analysis
+  description: Stanford Delay Discounting fMRI Analysis
+  version: '1.0'
+  pi: Russell Poldrack
+  contact: your_email@stanford.edu
+paths:
+  data_root: /oak/stanford/groups/russpold/data/uh2/aim1
+  fmriprep_dir: /oak/stanford/groups/russpold/data/uh2/aim1/derivatives/fmriprep
+  behavior_dir: /oak/stanford/groups/russpold/data/uh2/aim1/behavioral_data/event_files
+  output_root: /oak/stanford/groups/russpold/data/uh2/aim1/derivatives/mvpa_analysis
+  output_dir: /oak/stanford/groups/russpold/data/uh2/aim1/derivatives/mvpa_analysis/delay_discounting_results
+  behavioral_output: behavioral_analysis
+  mvpa_output: mvpa_analysis
+  geometry_output: geometry_analysis
+  dd_geometry_output: dd_geometry_results
+  masks_dir: /oak/stanford/groups/russpold/data/uh2/aim1/derivatives/masks
+  cache_dir: /oak/stanford/groups/russpold/data/uh2/aim1/derivatives/mvpa_analysis/analysis_cache
+  log_dir: ./logs
+fmri:
+  tr: 0.68
+  hemi_lag: 0
+  smoothing_fwhm: 6.0
+  high_pass_filter: 0.01
+  standardize: true
+  detrend: true
+  confound_strategy: auto
+  slice_time_ref: 0.5
+roi_masks:
+  core_rois:
+  - striatum
+  - dlpfc
+  - vmpfc
+  optional_rois:
+  - left_striatum
+  - right_striatum
+  - left_dlpfc
+  - right_dlpfc
+  - acc
+  - ofc
+  mask_files:
+    striatum: striatum_mask.nii.gz
+    dlpfc: dlpfc_mask.nii.gz
+    vmpfc: vmpfc_mask.nii.gz
+    left_striatum: left_striatum_mask.nii.gz
+    right_striatum: right_striatum_mask.nii.gz
+    left_dlpfc: left_dlpfc_mask.nii.gz
+    right_dlpfc: right_dlpfc_mask.nii.gz
+    acc: acc_mask.nii.gz
+    ofc: ofc_mask.nii.gz
+behavioral:
+  min_accuracy: 0.6
+  max_rt: 10.0
+  min_rt: 0.1
+  discount_model: hyperbolic
+  fit_method: least_squares
+  variables:
+  - choice
+  - choice_binary
+  - rt
+  - onset
+  - delay_days
+  - amount_small
+  - amount_large
+  - sv_chosen
+  - sv_unchosen
+  - sv_diff
+  - sv_sum
+  - later_delay
+  - discount_rate
+  - model_fit
+mvpa:
+  cv_folds: 5
+  cv_shuffle: true
+  cv_random_state: 42
+  cv_strategy: stratified
+  n_permutations: 1000
+  perm_random_state: 42
+  alpha: 0.05
+  multiple_comparisons: fdr_bh
+  classification:
+    default_algorithm: svm
+    algorithms:
+      svm:
+        C: 1.0
+        kernel: linear
+        class_weight: balanced
+      logistic:
+        C: 1.0
+        class_weight: balanced
+        solver: liblinear
+      random_forest:
+        n_estimators: 100
+        max_depth: 10
+        class_weight: balanced
+  regression:
+    default_algorithm: ridge
+    algorithms:
+      ridge:
+        alpha: 1.0
+        normalize: false
+      lasso:
+        alpha: 1.0
+        normalize: false
+      elastic_net:
+        alpha: 1.0
+        l1_ratio: 0.5
+        normalize: false
+  feature_selection:
+    enabled: false
+    method: univariate
+    n_features: 1000
+    score_func: f_classif
+  data_preparation:
+    standardize: true
+    remove_mean: true
+    variance_threshold: 1.0e-08
+  targets:
+    classification:
+    - choice_binary
+    regression:
+    - sv_diff
+    - sv_sum
+    - sv_chosen
+    - sv_unchosen
+    - later_delay
+    - discount_rate
+  quality_control:
+    min_samples_per_class: 5
+    min_trials_per_subject: 20
+    max_missing_data: 0.1
+geometry:
+  output_dir: ./dd_geometry_results
+  save_plots: true
+  plot_format: png
+  dpi: 300
+  n_permutations: 1000
+  random_state: 42
+  alpha: 0.05
+  dimensionality_reduction:
+    pca:
+      n_components: 15
+      whiten: false
+    mds:
+      n_components: 8
+      metric: true
+      dissimilarity: euclidean
+    tsne:
+      n_components: 3
+      perplexity: 30
+      learning_rate: 200
+    isomap:
+      n_components: 5
+      n_neighbors: 10
+  data_preparation:
+    standardize_data: true
+    remove_mean: true
+  delay_discounting:
+    delay_short_threshold: 7
+    delay_long_threshold: 30
+    value_percentile_split: 50
+    value_diff_percentile: 67
+  comparisons:
+    choice:
+      description: Compare neural geometry between sooner-smaller vs larger-later
+        choices
+      enabled: true
+    delay_short_vs_long:
+      description: "Compare short delays (\u22647 days) vs long delays (\u226530 days)"
+      enabled: true
+    delay_immediate_vs_delayed:
+      description: Compare immediate (0 days) vs any delayed trials
+      enabled: true
+    sv_chosen_median:
+      description: Compare trials with high vs low chosen option subjective value
+      enabled: true
+    sv_unchosen_median:
+      description: Compare trials with high vs low unchosen option subjective value
+      enabled: true
+    sv_difference_median:
+      description: Compare trials with high vs low difference in subjective values
+      enabled: true
+    value_diff_terciles:
+      description: Compare trials where options are very similar vs very different
+        in value
+      enabled: true
+parallel:
+  n_jobs: 1
+  backend: loky
+  subjects:
+    enabled: true
+    n_jobs: 8
+    chunk_size: 1
+  rois:
+    enabled: true
+    n_jobs: 4
+    chunk_size: 1
+  nested_parallel:
+    enabled: true
+    max_workers: 16
+  resource_management:
+    memory_limit_gb: 64
+    cpu_limit: 16
+    timeout_minutes: 120
+memory:
+  memory_mapping:
+    enabled: true
+    threshold_gb: 1.0
+    force_memmap: false
+  memory_buffer:
+    available_memory_buffer: 0.2
+    max_memory_per_process_gb: 8.0
+  shared_memory:
+    enabled: true
+    temp_dir: /tmp/mvpa_memmap
+  monitoring:
+    enabled: true
+    log_usage: true
+    warning_threshold: 0.8
+caching:
+  enabled: true
+  cache_dir: analysis_cache
+  version: '1.0'
+  management:
+    max_cache_size_gb: 50
+    cleanup_threshold: 0.8
+    auto_cleanup: true
+  precision:
+    float_precision: 6
+    hash_precision: 16
+  levels:
+    behavioral_analysis: true
+    beta_extraction: true
+    mvpa_decoding: true
+    geometry_analysis: true
+  invalidation:
+    on_config_change: true
+    on_code_change: true
+    on_data_change: true
+logging:
+  level: INFO
+  console: true
+  file: true
+  log_file: mvpa_analysis.log
+  max_file_size_mb: 100
+  backup_count: 5
+  components:
+    behavioral: INFO
+    mvpa: INFO
+    geometry: INFO
+    parallel: INFO
+    memory: INFO
+    caching: INFO
+  performance:
+    enabled: true
+    log_memory_usage: true
+    log_timing: true
+    log_progress: true
+slurm:
+  job_name: delay_discounting_mvpa
+  partition: normal
+  time: 08:00:00
+  nodes: 1
+  ntasks: 1
+  cpus_per_task: 16
+  memory_gb: 32
+  output_dir: ./logs
+  mail_type: ALL
+  mail_user: your_email@stanford.edu
+  environment:
+    omp_num_threads: auto
+    pythonpath: .
+  auto_configure:
+    enabled: true
+    memory_multiplier: 0.8
+    cpu_multiplier: 1.0

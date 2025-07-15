@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Analyze and Visualize Results from Delay Discounting MVPA Pipeline
+Analyze and Visualize Results from Delay Discounting MVPA Pipeline (REFACTORED to use logger_utils)
 
 This script processes the results from the main analysis pipeline and creates
 comprehensive visualizations and statistical summaries.
@@ -8,6 +8,13 @@ comprehensive visualizations and statistical summaries.
 Author: Cognitive Neuroscience Lab, Stanford University
 """
 
+# Import logger utilities FIRST for standardized setup
+from logger_utils import (
+    setup_pipeline_environment, create_analysis_parser, 
+    log_analysis_results, setup_script_logging
+)
+
+# Core imports (managed by logger_utils)
 import os
 import pickle
 import numpy as np
@@ -18,7 +25,13 @@ from pathlib import Path
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
 import warnings
-warnings.filterwarnings('ignore')
+
+# Data utilities (NEW!)
+from data_utils import (
+    load_processed_data, check_data_integrity, get_complete_subjects,
+    SubjectManager, DataError
+)
+from oak_storage_config import OAKConfig
 
 # Set style
 plt.style.use('seaborn-v0_8')
@@ -42,10 +55,18 @@ class ResultsAnalyzer:
         self.output_dir.mkdir(exist_ok=True)
         
     def load_results(self):
-        """Load results from pickle file"""
-        with open(self.results_file, 'rb') as f:
-            results = pickle.load(f)
-        return results
+        """Load results from pickle file (REFACTORED to use data_utils)"""
+        try:
+            # Use centralized data loading (NEW!)
+            results, metadata = load_processed_data(self.results_file)
+            print(f"Loaded results with metadata: {metadata}")
+            return results
+        except DataError as e:
+            print(f"Data loading error: {e}")
+            # Fallback to original method
+            with open(self.results_file, 'rb') as f:
+                results = pickle.load(f)
+            return results
     
     def extract_behavioral_summary(self):
         """Extract behavioral statistics across subjects"""
@@ -366,19 +387,126 @@ class ResultsAnalyzer:
         
         print("Analysis complete!")
 
+def check_pipeline_data_integrity():
+    """Check data integrity for all subjects (NEW function using data_utils)"""
+    print("Checking data integrity for all subjects...")
+    print("=" * 50)
+    
+    config = OAKConfig()
+    
+    # Get complete subjects
+    subjects = get_complete_subjects(config)
+    print(f"Found {len(subjects)} subjects with complete data")
+    
+    # Run comprehensive integrity check
+    integrity_report = check_data_integrity(subjects, config)
+    
+    # Display summary
+    print(f"\nData Integrity Summary:")
+    print(f"Total subjects checked: {len(integrity_report)}")
+    print(f"Complete subjects: {integrity_report['complete'].sum()}")
+    print(f"Subjects with fMRI: {integrity_report['has_fmri'].sum()}")
+    print(f"Subjects with behavior: {integrity_report['has_behavior'].sum()}")
+    print(f"Valid behavioral data: {integrity_report['behavior_valid'].sum()}")
+    print(f"Valid fMRI data: {integrity_report['fmri_valid'].sum()}")
+    
+    # Save report
+    report_file = Path('./data_integrity_report.csv')
+    integrity_report.to_csv(report_file, index=False)
+    print(f"\nDetailed report saved to: {report_file}")
+    
+    return integrity_report
+
 def main():
-    """Main function"""
-    # Look for results file
-    results_file = "./delay_discounting_results/all_results.pkl"
+    """Main function (ENHANCED with logger_utils integration)"""
     
-    if not os.path.exists(results_file):
-        print(f"Results file not found: {results_file}")
-        print("Please run the main analysis pipeline first.")
-        return
+    # Create standardized argument parser
+    parser = create_analysis_parser(
+        script_name='analyze_results',
+        analysis_type='behavioral',  # closest match for results analysis
+        require_data=False  # results file is optional
+    )
     
-    # Run analysis
-    analyzer = ResultsAnalyzer(results_file)
-    analyzer.run_analysis()
+    # Add script-specific arguments
+    parser.parser.add_argument('--check-data', action='store_true',
+                              help='Check data integrity for all subjects')
+    
+    # Parse arguments
+    args = parser.parse_args()
+    
+    # Setup complete environment
+    env = setup_pipeline_environment(
+        script_name='analyze_results',
+        args=args,
+        required_modules=['numpy', 'pandas', 'matplotlib', 'seaborn', 'scipy']
+    )
+    
+    # Extract environment components
+    logger = env['logger']
+    config = env['config']
+    
+    try:
+        if args.check_data:
+            # Run data integrity check (NEW!)
+            logger.logger.info("Running data integrity check...")
+            check_pipeline_data_integrity()
+            logger.log_pipeline_end('analyze_results', success=True)
+            return
+        
+        # Look for results file
+        if args.results_file:
+            results_file = args.results_file
+        else:
+            # Try standard locations
+            possible_locations = [
+                f"{config.OUTPUT_DIR}/all_results.pkl",
+                "./delay_discounting_results/all_results.pkl",
+                "./all_results.pkl"
+            ]
+            
+            results_file = None
+            for location in possible_locations:
+                if os.path.exists(location):
+                    results_file = location
+                    break
+        
+        if not results_file or not os.path.exists(results_file):
+            logger.logger.error("Results file not found!")
+            logger.logger.info("Tried locations:")
+            for location in possible_locations:
+                logger.logger.info(f"  - {location}")
+            logger.logger.info("\nPlease run the main analysis pipeline first or specify --results-file")
+            logger.logger.info("Or use --check-data to check data integrity")
+            logger.log_pipeline_end('analyze_results', success=False)
+            return
+        
+        logger.logger.info(f"Using results file: {results_file}")
+        
+        # Create analyzer
+        analyzer = ResultsAnalyzer(results_file)
+        analyzer.output_dir = Path(args.output_dir)
+        analyzer.output_dir.mkdir(exist_ok=True)
+        
+        # Log analysis start
+        logger.logger.info(f"Output directory: {analyzer.output_dir}")
+        
+        # Run analysis with progress tracking
+        analyzer.run_analysis()
+        
+        # Log success
+        analysis_results = {
+            'success': True,
+            'output_dir': str(analyzer.output_dir),
+            'results_file': results_file
+        }
+        
+        log_analysis_results(logger, analysis_results, 'results_analysis')
+        logger.log_pipeline_end('analyze_results', success=True)
+        
+    except Exception as e:
+        logger.log_error_with_traceback(e, 'main analysis')
+        logger.log_pipeline_end('analyze_results', success=False)
+        raise
 
 if __name__ == "__main__":
     main() 

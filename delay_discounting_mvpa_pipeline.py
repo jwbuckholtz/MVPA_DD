@@ -57,6 +57,26 @@ import multiprocessing as mp
 # Configuration
 from oak_storage_config import OAKConfig as Config
 
+# Data utilities
+from data_utils import (
+    load_behavioral_data, load_fmri_data, load_confounds, 
+    extract_roi_timeseries, get_complete_subjects, check_mask_exists,
+    load_mask, DataError, SubjectManager
+)
+
+# MVPA utilities (NEW!)
+from mvpa_utils import (
+    run_classification, run_regression, extract_neural_patterns,
+    run_dimensionality_reduction, MVPAConfig, MVPAError,
+    run_choice_classification, run_continuous_decoding,
+    update_mvpa_config
+)
+
+# Add memory-efficient imports after existing imports
+from memory_efficient_data import (
+    MemoryEfficientLoader, MemoryConfig, create_memory_efficient_loader
+)
+
 class BehavioralAnalysis:
     """Class for behavioral analysis and discounting parameter estimation"""
     
@@ -182,7 +202,7 @@ class BehavioralAnalysis:
     
     def process_subject_behavior(self, worker_id):
         """
-        Process behavioral data for a single subject
+        Process behavioral data for a single subject (REFACTORED to use data_utils)
         
         Parameters:
         -----------
@@ -193,139 +213,155 @@ class BehavioralAnalysis:
         --------
         dict : Processed behavioral data and fitted parameters
         """
-        # Load behavioral data
-        behavior_file = f"{self.config.BEHAVIOR_DIR}/{worker_id}_discountFix_events.tsv"
-        
-        if not os.path.exists(behavior_file):
-            return {'worker_id': worker_id, 'success': False, 'error': 'File not found'}
-        
         try:
-            df = pd.read_csv(behavior_file, sep='\t')
+            # Use centralized data loading (NEW!)
+            df_processed = load_behavioral_data(worker_id, self.config, 
+                                               validate=True, compute_sv=True)
             
             # Quality control
-            if len(df) == 0:
+            if len(df_processed) == 0:
                 return {'worker_id': worker_id, 'success': False, 'error': 'Empty file'}
             
-            # Convert choices to binary (1 = larger_later, 0 = smaller_sooner)
-            choices = (df['choice'] == 'larger_later').astype(int)
+            # Get choices (already processed by data_utils)
+            choices = df_processed['choice'].values
             
             # Check for minimum number of trials and choice variability
-            if len(choices) < 10 or choices.var() == 0:
+            valid_choices = choices[~np.isnan(choices)]
+            if len(valid_choices) < 10 or valid_choices.var() == 0:
                 return {'worker_id': worker_id, 'success': False, 
                        'error': 'Insufficient trials or no choice variability'}
             
-            # Fit discount rate
-            fit_results = self.fit_discount_rate(
-                choices.values,
-                df['large_amount'].values,
-                df['later_delay'].values
-            )
-            
-            if not fit_results['success']:
+            # Extract fit results if available, otherwise refit
+            if 'sv_chosen' in df_processed.columns:
+                # If subjective values computed successfully, extract discount rate
+                # Re-fit to get exact parameters for this analysis
+                valid_mask = ~np.isnan(choices)
+                fit_results = self.fit_discount_rate(
+                    choices[valid_mask],
+                    df_processed['large_amount'].values[valid_mask],
+                    df_processed['delay_days'].values[valid_mask]
+                )
+                
+                if not fit_results['success']:
+                    return {'worker_id': worker_id, 'success': False, 
+                           'error': fit_results['error']}
+                
+                k_fit = fit_results['k']
+                pseudo_r2 = fit_results['pseudo_r2']
+            else:
                 return {'worker_id': worker_id, 'success': False, 
-                       'error': fit_results['error']}
+                       'error': 'Subjective values not computed by data_utils'}
             
-            # Calculate trial-wise variables
-            k_fit = fit_results['k']
-            
-            # Calculate subjective values for each trial
-            sv_large = self.subjective_value(df['large_amount'], df['later_delay'], k_fit)
-            sv_small = 20.0  # Fixed amount for smaller_sooner
-            
-            # Calculate derived variables
-            sv_diff = sv_large - sv_small
-            sv_sum = sv_large + sv_small
-            
-            # Chosen and unchosen subjective values
-            sv_chosen = np.where(choices, sv_large, sv_small)
-            sv_unchosen = np.where(choices, sv_small, sv_large)
-            
-            # Add to dataframe
-            df_processed = df.copy()
+            # Add additional metadata
             df_processed['worker_id'] = worker_id
             df_processed['k'] = k_fit
-            df_processed['choice_binary'] = choices
-            df_processed['sv_large'] = sv_large
-            df_processed['sv_small'] = sv_small
-            df_processed['sv_diff'] = sv_diff
-            df_processed['sv_sum'] = sv_sum
-            df_processed['sv_chosen'] = sv_chosen
-            df_processed['sv_unchosen'] = sv_unchosen
-            df_processed['choice_prob'] = fit_results['choice_prob']
+            df_processed['choice_binary'] = choices  # For compatibility
+            if 'choice_prob' not in df_processed.columns:
+                df_processed['choice_prob'] = fit_results['choice_prob'][:len(df_processed)]
             
             return {
                 'worker_id': worker_id,
                 'success': True,
                 'data': df_processed,
                 'k': k_fit,
-                'pseudo_r2': fit_results['pseudo_r2'],
-                'n_trials': len(df),
-                'choice_rate': np.mean(choices)
+                'pseudo_r2': pseudo_r2,
+                'n_trials': len(df_processed),
+                'choice_rate': np.mean(valid_choices)
             }
             
+        except DataError as e:
+            return {'worker_id': worker_id, 'success': False, 'error': f'Data error: {str(e)}'}
         except Exception as e:
             return {'worker_id': worker_id, 'success': False, 'error': str(e)}
 
-class fMRIPreprocessing:
-    """Class for fMRI data preprocessing and loading"""
+class fMRIDataLoader:
+    """Class for loading and preparing fMRIPrep-preprocessed fMRI data"""
     
-    def __init__(self, config):
+    def __init__(self, config, enable_memory_efficient=False, memory_config=None):
         self.config = config
+        self.enable_memory_efficient = enable_memory_efficient
         
-    def load_subject_fmri(self, worker_id):
+        # Initialize memory-efficient loader if requested
+        if self.enable_memory_efficient:
+            self.memory_loader = create_memory_efficient_loader(config, memory_config)
+        else:
+            self.memory_loader = None
+        
+    def load_subject_fmri(self, worker_id, force_memory_efficient=False):
         """
-        Load preprocessed fMRI data for a subject
+        Load fMRIPrep-preprocessed fMRI data for a subject
         
         Parameters:
         -----------
         worker_id : str
             Subject identifier
+        force_memory_efficient : bool
+            Force use of memory-efficient loading for this call
             
         Returns:
         --------
         dict : fMRI data and metadata
         """
-        # Construct path to fMRI data
-        fmri_dir = f"{self.config.FMRIPREP_DIR}/{worker_id}/ses-2/func"
-        
-        # Look for task-discountFix files
-        pattern = f"{worker_id}_ses-2_task-discountFix_*_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz"
-        
-        fmri_files = list(Path(fmri_dir).glob(pattern))
-        
-        if not fmri_files:
-            return {'success': False, 'error': 'No fMRI files found'}
-        
-        # Use the first run if multiple exist
-        fmri_file = fmri_files[0]
-        
         try:
-            # Load fMRI data
-            img = nib.load(str(fmri_file))
+            # Decide whether to use memory-efficient loading
+            use_memory_efficient = (self.enable_memory_efficient or 
+                                  force_memory_efficient) and self.memory_loader
             
-            # Load confounds
-            confounds_file = str(fmri_file).replace('_desc-preproc_bold.nii.gz', 
-                                                   '_desc-confounds_timeseries.tsv')
-            
-            confounds = None
-            if os.path.exists(confounds_file):
-                confounds_df = pd.read_csv(confounds_file, sep='\t')
+            if use_memory_efficient:
+                # Use memory-efficient loading
+                fmri_data = self.memory_loader.load_fmri_memmap(worker_id)
                 
-                # Select relevant confounds
-                confound_cols = [col for col in confounds_df.columns if 
-                               any(x in col for x in ['trans_', 'rot_', 'csf', 'white_matter', 
-                                                     'global_signal', 'aroma', 'motion'])]
+                # Handle different return types
+                if hasattr(fmri_data, 'array'):
+                    # Memory-mapped array - create compatible interface
+                    img = None  # We'll handle this differently
+                    data_source = 'memmap'
+                else:
+                    # Regular array - wrap in nibabel-like interface
+                    import nibabel as nib
+                    img = nib.Nifti1Image(fmri_data, affine=np.eye(4))
+                    data_source = 'memory'
                 
-                if confound_cols:
-                    confounds = confounds_df[confound_cols].fillna(0).values
-            
-            return {
-                'success': True,
-                'img': img,
-                'confounds': confounds,
-                'file_path': str(fmri_file)
-            }
-            
+                # Load confounds normally
+                confounds_df = load_confounds(worker_id, self.config)
+                confounds = None
+                if confounds_df is not None:
+                    confounds = confounds_df.values
+                
+                return {
+                    'success': True,
+                    'img': img,
+                    'fmri_data': fmri_data,  # Raw data for memory-efficient processing
+                    'confounds': confounds,
+                    'data_source': data_source,
+                    'memory_efficient': True,
+                    'file_path': getattr(fmri_data, 'metadata', {}).get('source', 'unknown')
+                }
+            else:
+                # Use standard loading (existing behavior)
+                img = load_fmri_data(worker_id, self.config, smoothed=False, validate=True)
+                confounds_df = load_confounds(worker_id, self.config)
+                
+                # Convert confounds to array if available
+                confounds = None
+                if confounds_df is not None:
+                    confounds = confounds_df.values
+                
+                # Get file path for compatibility
+                file_path = img.get_filename()
+                
+                return {
+                    'success': True,
+                    'img': img,
+                    'fmri_data': None,  # Not used in standard loading
+                    'confounds': confounds,
+                    'data_source': 'standard',
+                    'memory_efficient': False,
+                    'file_path': file_path
+                }
+                
+        except DataError as e:
+            return {'success': False, 'error': f'Data error: {str(e)}'}
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
@@ -338,19 +374,44 @@ class MVPAAnalysis:
         
     def create_roi_maskers(self):
         """Create NiftiMasker objects for each ROI"""
+        from data_utils import check_mask_exists, load_mask
+        
+        print("Creating ROI maskers...")
+        available_rois = []
+        
         for roi_name, mask_path in self.config.ROI_MASKS.items():
-            if os.path.exists(mask_path):
-                self.maskers[roi_name] = NiftiMasker(
-                    mask_img=mask_path,
-                    standardize=True,
-                    detrend=True,
-                    high_pass=0.01,
-                    t_r=self.config.TR,
-                    memory='nilearn_cache',
-                    memory_level=1
-                )
+            if check_mask_exists(mask_path):
+                try:
+                    # Validate mask before using
+                    mask_img = load_mask(mask_path, validate=True)
+                    
+                    self.maskers[roi_name] = NiftiMasker(
+                        mask_img=mask_path,
+                        standardize=True,
+                        detrend=True,
+                        high_pass=0.01,
+                        t_r=self.config.TR,
+                        memory='nilearn_cache',
+                        memory_level=1
+                    )
+                    
+                    available_rois.append(roi_name)
+                    print(f"✓ Created masker for {roi_name}")
+                    
+                except Exception as e:
+                    print(f"✗ Failed to create masker for {roi_name}: {e}")
             else:
-                print(f"Warning: ROI mask not found: {mask_path}")
+                print(f"✗ ROI mask not found: {roi_name} ({mask_path})")
+        
+        print(f"Created maskers for {len(available_rois)} ROIs: {', '.join(available_rois)}")
+        
+        # Ensure we have at least core ROIs available
+        if hasattr(self.config, 'CORE_ROI_MASKS'):
+            missing_core = [roi for roi in self.config.CORE_ROI_MASKS if roi not in available_rois]
+            if missing_core:
+                raise ValueError(f"Missing required core ROI masks: {missing_core}")
+        
+        return available_rois
     
     def create_whole_brain_masker(self):
         """Create whole-brain masker"""
@@ -366,6 +427,8 @@ class MVPAAnalysis:
     def extract_trial_data(self, img, events_df, roi_name, confounds=None):
         """
         Extract trial-wise neural data using GLM approach
+        
+        Uses centralized MVPA utilities for consistent implementation.
         
         Parameters:
         -----------
@@ -387,35 +450,26 @@ class MVPAAnalysis:
         
         masker = self.maskers[roi_name]
         
-        # Fit masker and extract time series
-        if confounds is not None:
-            X = masker.fit_transform(img, confounds=confounds)
+        # Use centralized pattern extraction
+        result = extract_neural_patterns(
+            img, events_df, masker,
+            confounds=confounds,
+            pattern_type='single_timepoint',
+            tr=self.config.TR,
+            hemi_lag=self.config.HEMI_LAG
+        )
+        
+        if result['success']:
+            return result['patterns']
         else:
-            X = masker.fit_transform(img)
-        
-        # Extract trial-wise data using onset times
-        n_trials = len(events_df)
-        n_voxels = X.shape[1]
-        trial_data = np.zeros((n_trials, n_voxels))
-        
-        for i, (_, trial) in enumerate(events_df.iterrows()):
-            onset_tr = int(trial['onset'] / self.config.TR)
-            
-            # Extract activity from onset + hemodynamic lag
-            trial_tr = onset_tr + self.config.HEMI_LAG
-            
-            if trial_tr < X.shape[0]:
-                trial_data[i, :] = X[trial_tr, :]
-            else:
-                # Handle edge case where trial extends beyond scan
-                trial_data[i, :] = X[-1, :]
-        
-        return trial_data
+            raise MVPAError(f"Pattern extraction failed: {result['error']}")
     
     def extract_trial_patterns(self, img, events_df, roi_name, confounds=None, 
                               pattern_type='single_timepoint', window_size=3):
         """
         Extract trial-wise neural patterns with different extraction methods
+        
+        Uses centralized MVPA utilities for consistent implementation.
         
         Parameters:
         -----------
@@ -445,125 +499,21 @@ class MVPAAnalysis:
         
         masker = self.maskers[roi_name]
         
-        # Fit masker and extract time series
-        if confounds is not None:
-            X = masker.fit_transform(img, confounds=confounds)
-        else:
-            X = masker.fit_transform(img)
-        
-        n_trials = len(events_df)
-        n_voxels = X.shape[1]
-        
-        results = {
-            'pattern_type': pattern_type,
-            'n_trials': n_trials,
-            'n_voxels': n_voxels,
-            'window_size': window_size
-        }
-        
-        if pattern_type == 'single_timepoint':
-            # Extract single timepoint at hemodynamic peak
-            trial_data = np.zeros((n_trials, n_voxels))
-            
-            for i, (_, trial) in enumerate(events_df.iterrows()):
-                onset_tr = int(trial['onset'] / self.config.TR)
-                trial_tr = onset_tr + self.config.HEMI_LAG
-                
-                if trial_tr < X.shape[0]:
-                    trial_data[i, :] = X[trial_tr, :]
-                else:
-                    trial_data[i, :] = X[-1, :]
-            
-            results['patterns'] = trial_data
-            
-        elif pattern_type == 'average_window':
-            # Average over time window around hemodynamic peak
-            trial_data = np.zeros((n_trials, n_voxels))
-            
-            for i, (_, trial) in enumerate(events_df.iterrows()):
-                onset_tr = int(trial['onset'] / self.config.TR)
-                peak_tr = onset_tr + self.config.HEMI_LAG
-                
-                # Define window
-                start_tr = max(0, peak_tr - window_size // 2)
-                end_tr = min(X.shape[0], peak_tr + window_size // 2 + 1)
-                
-                # Average over window
-                if start_tr < end_tr:
-                    trial_data[i, :] = np.mean(X[start_tr:end_tr, :], axis=0)
-                else:
-                    trial_data[i, :] = X[peak_tr, :] if peak_tr < X.shape[0] else X[-1, :]
-            
-            results['patterns'] = trial_data
-            results['window_start'] = start_tr
-            results['window_end'] = end_tr
-            
-        elif pattern_type == 'temporal_profile':
-            # Extract full temporal profile for each trial
-            profile_length = window_size * 2 + 1  # Window around peak
-            trial_profiles = np.zeros((n_trials, n_voxels, profile_length))
-            
-            for i, (_, trial) in enumerate(events_df.iterrows()):
-                onset_tr = int(trial['onset'] / self.config.TR)
-                peak_tr = onset_tr + self.config.HEMI_LAG
-                
-                start_tr = max(0, peak_tr - window_size)
-                end_tr = min(X.shape[0], peak_tr + window_size + 1)
-                
-                # Extract profile
-                profile = X[start_tr:end_tr, :]
-                
-                # Pad if necessary
-                if profile.shape[0] < profile_length:
-                    padding = np.zeros((profile_length - profile.shape[0], n_voxels))
-                    profile = np.vstack([profile, padding])
-                
-                trial_profiles[i, :, :] = profile.T
-            
-            results['patterns'] = trial_profiles
-            results['profile_length'] = profile_length
-            
-        elif pattern_type == 'peak_detection':
-            # Automatically detect peak response for each trial
-            trial_data = np.zeros((n_trials, n_voxels))
-            peak_times = np.zeros(n_trials)
-            
-            for i, (_, trial) in enumerate(events_df.iterrows()):
-                onset_tr = int(trial['onset'] / self.config.TR)
-                
-                # Search window: 2-8 TRs after onset (typical HRF range)
-                search_start = onset_tr + 2
-                search_end = min(X.shape[0], onset_tr + 8)
-                
-                if search_start < search_end:
-                    # Find peak as maximum mean activity across voxels
-                    search_window = X[search_start:search_end, :]
-                    mean_activity = np.mean(search_window, axis=1)
-                    peak_idx = np.argmax(mean_activity)
-                    peak_tr = search_start + peak_idx
-                    
-                    trial_data[i, :] = X[peak_tr, :]
-                    peak_times[i] = peak_tr
-                else:
-                    # Fallback to standard hemodynamic lag
-                    peak_tr = onset_tr + self.config.HEMI_LAG
-                    if peak_tr < X.shape[0]:
-                        trial_data[i, :] = X[peak_tr, :]
-                    else:
-                        trial_data[i, :] = X[-1, :]
-                    peak_times[i] = peak_tr
-            
-            results['patterns'] = trial_data
-            results['peak_times'] = peak_times
-        
-        else:
-            raise ValueError(f"Unknown pattern_type: {pattern_type}")
-        
-        return results
+        # Use centralized pattern extraction
+        return extract_neural_patterns(
+            img, events_df, masker,
+            confounds=confounds,
+            pattern_type=pattern_type,
+            tr=self.config.TR,
+            hemi_lag=self.config.HEMI_LAG,
+            window_size=window_size
+        )
     
     def decode_choices(self, X, y, roi_name):
         """
         Decode choice (smaller_sooner vs larger_later) from neural data
+        
+        Uses centralized MVPA utilities for consistent implementation.
         
         Parameters:
         -----------
@@ -578,39 +528,19 @@ class MVPAAnalysis:
         --------
         dict : Decoding results
         """
-        if len(np.unique(y)) < 2:
-            return {'success': False, 'error': 'Insufficient choice variability'}
-        
-        # Prepare classifier
-        classifier = SVC(kernel='linear', C=1.0, random_state=42)
-        
-        # Cross-validation
-        cv = StratifiedKFold(n_splits=self.config.CV_FOLDS, shuffle=True, random_state=42)
-        
-        # Perform cross-validation
-        scores = cross_val_score(classifier, X, y, cv=cv, scoring='accuracy', n_jobs=1)
-        
-        # Permutation test
-        score_perm, perm_scores, p_value = permutation_test_score(
-            classifier, X, y, cv=cv, n_permutations=self.config.N_PERMUTATIONS,
-            scoring='accuracy', n_jobs=1, random_state=42
+        return run_choice_classification(
+            X, y, 
+            roi_name=roi_name,
+            algorithm='svm',
+            cv_strategy='stratified',
+            n_permutations=self.config.N_PERMUTATIONS
         )
-        
-        return {
-            'success': True,
-            'roi': roi_name,
-            'mean_accuracy': np.mean(scores),
-            'std_accuracy': np.std(scores),
-            'scores': scores,
-            'permutation_accuracy': score_perm,
-            'permutation_scores': perm_scores,
-            'p_value': p_value,
-            'chance_level': np.mean(y)
-        }
     
     def decode_continuous_variable(self, X, y, roi_name, variable_name):
         """
         Decode continuous variable (e.g., subjective value) from neural data
+        
+        Uses centralized MVPA utilities for consistent implementation.
         
         Parameters:
         -----------
@@ -627,33 +557,77 @@ class MVPAAnalysis:
         --------
         dict : Decoding results
         """
-        # Prepare regressor
-        regressor = Ridge(alpha=1.0, random_state=42)
-        
-        # Cross-validation
-        cv = StratifiedKFold(n_splits=self.config.CV_FOLDS, shuffle=True, random_state=42)
-        
-        # Perform cross-validation
-        scores = cross_val_score(regressor, X, y, cv=cv, scoring='r2', n_jobs=1)
-        
-        # Permutation test
-        y_perm = np.random.permutation(y)
-        score_perm, perm_scores, p_value = permutation_test_score(
-            regressor, X, y_perm, cv=cv, n_permutations=self.config.N_PERMUTATIONS,
-            scoring='r2', n_jobs=1, random_state=42
+        return run_continuous_decoding(
+            X, y,
+            variable_name=variable_name,
+            roi_name=roi_name,
+            algorithm='ridge',
+            cv_strategy='kfold',
+            n_permutations=self.config.N_PERMUTATIONS
         )
+
+    def extract_trial_data_memory_efficient(self, fmri_data, events_df, roi_name, confounds=None):
+        """
+        Extract trial-wise neural data from memory-mapped fMRI data
         
-        return {
-            'success': True,
-            'roi': roi_name,
-            'variable': variable_name,
-            'mean_r2': np.mean(scores),
-            'std_r2': np.std(scores),
-            'scores': scores,
-            'permutation_r2': score_perm,
-            'permutation_scores': perm_scores,
-            'p_value': p_value
-        }
+        Parameters:
+        -----------
+        fmri_data : MemoryMappedArray
+            Memory-mapped fMRI data
+        events_df : DataFrame
+            Trial events with onsets
+        roi_name : str
+            Name of ROI to extract from
+        confounds : array-like, optional
+            Confound regressors
+            
+        Returns:
+        --------
+        array : Trial-wise neural data (n_trials x n_voxels)
+        """
+        if roi_name not in self.maskers:
+            raise ValueError(f"Masker for {roi_name} not found")
+        
+        masker = self.maskers[roi_name]
+        
+        # Get trial onsets
+        onsets = events_df['onset'].values
+        tr = self.config.TR
+        hemi_lag = self.config.HEMI_LAG
+        
+        # Convert onsets to TRs
+        onset_trs = (onsets / tr + hemi_lag).astype(int)
+        
+        # Load and apply mask
+        if hasattr(masker, 'mask_img_'):
+            mask = masker.mask_img_.get_fdata().astype(bool)
+        else:
+            # Fit masker if not already fitted
+            import nibabel as nib
+            temp_img = nib.Nifti1Image(fmri_data.array[..., 0], affine=np.eye(4))
+            masker.fit(temp_img)
+            mask = masker.mask_img_.get_fdata().astype(bool)
+        
+        # Extract ROI voxels for each trial
+        roi_indices = np.where(mask.flatten())[0]
+        n_voxels = len(roi_indices)
+        n_trials = len(onset_trs)
+        
+        # Memory-efficient trial extraction
+        X = np.zeros((n_trials, n_voxels), dtype=fmri_data.dtype)
+        
+        for i, tr in enumerate(onset_trs):
+            if tr < fmri_data.shape[3]:  # Check bounds
+                volume = fmri_data.array[..., tr].flatten()
+                X[i, :] = volume[roi_indices]
+        
+        # Apply standardization if the masker would do it
+        if hasattr(masker, 'standardize') and masker.standardize:
+            from sklearn.preprocessing import StandardScaler
+            scaler = StandardScaler()
+            X = scaler.fit_transform(X)
+        
+        return X
 
 class GeometryAnalysis:
     """Class for neural geometry analysis"""
@@ -684,6 +658,8 @@ class GeometryAnalysis:
         """
         Perform dimensionality reduction on neural data
         
+        Uses centralized MVPA utilities for consistent implementation.
+        
         Parameters:
         -----------
         X : array
@@ -697,20 +673,14 @@ class GeometryAnalysis:
         --------
         array : Low-dimensional embedding (n_trials x n_components)
         """
-        if method == 'pca':
-            reducer = PCA(n_components=n_components, random_state=42)
-        elif method == 'mds':
-            reducer = MDS(n_components=n_components, random_state=42, dissimilarity='euclidean')
-        elif method == 'tsne':
-            reducer = TSNE(n_components=min(n_components, 3), random_state=42)
-        elif method == 'isomap':
-            reducer = Isomap(n_components=n_components)
+        result = run_dimensionality_reduction(
+            X, method=method, n_components=n_components
+        )
+        
+        if result['success']:
+            return result['embedding'], result['reducer']
         else:
-            raise ValueError(f"Unknown method: {method}")
-        
-        embedding = reducer.fit_transform(X)
-        
-        return embedding, reducer
+            raise MVPAError(f"Dimensionality reduction failed: {result['error']}")
     
     def behavioral_geometry_correlation(self, embedding, behavioral_vars):
         """
@@ -1378,8 +1348,8 @@ def setup_directories(config):
                      config.MVPA_OUTPUT, config.GEOMETRY_OUTPUT]:
         Path(directory).mkdir(parents=True, exist_ok=True)
 
-def main():
-    """Main analysis pipeline"""
+def main(enable_memory_efficient=False, memory_config=None):
+    """Main analysis pipeline with optional memory efficiency"""
     print("Starting Delay Discounting MVPA Analysis Pipeline")
     print("=" * 60)
     
@@ -1387,11 +1357,27 @@ def main():
     config = Config()
     setup_directories(config)
     
+    # Log memory efficiency status
+    if enable_memory_efficient:
+        print("🚀 Memory-efficient data loading: ENABLED")
+        if memory_config is None:
+            memory_config = MemoryConfig()
+            print(f"   Memory threshold: {memory_config.MEMMAP_THRESHOLD_GB} GB")
+    else:
+        print("📊 Standard data loading: ENABLED")
+    
     # Initialize analysis classes
     behavioral_analysis = BehavioralAnalysis(config)
-    fmri_preprocessing = fMRIPreprocessing(config)
+    fmri_loader = fMRIDataLoader(config, enable_memory_efficient, memory_config)
     mvpa_analysis = MVPAAnalysis(config)
     geometry_analysis = GeometryAnalysis(config)
+    
+    # Configure MVPA utilities to match main config
+    update_mvpa_config(
+        cv_folds=config.CV_FOLDS,
+        n_permutations=config.N_PERMUTATIONS,
+        n_jobs=1  # Conservative for memory management
+    )
     
     # Create maskers
     mvpa_analysis.create_roi_maskers()
@@ -1399,8 +1385,8 @@ def main():
     
     print(f"Analysis will be performed on {len(mvpa_analysis.maskers)} ROIs")
     
-    # Get list of subjects (you'll need to implement this based on your data structure)
-    subjects = get_subject_list(config)  # This function needs to be implemented
+    # Get list of subjects
+    subjects = get_subject_list(config)
     print(f"Found {len(subjects)} subjects")
     
     # Process each subject
@@ -1419,18 +1405,32 @@ def main():
         
         # 2. Load fMRI data
         print("  - Loading fMRI data...")
-        fmri_result = fmri_preprocessing.load_subject_fmri(worker_id)
+        fmri_result = fmri_loader.load_subject_fmri(worker_id)
         
         if not fmri_result['success']:
             print(f"    Failed: {fmri_result['error']}")
             continue
+        
+        # Log memory efficiency status
+        if fmri_result['memory_efficient']:
+            print(f"    ✓ Using memory-efficient loading ({fmri_result['data_source']})")
         
         # 3. MVPA analysis
         print("  - Running MVPA analysis...")
         mvpa_results = {}
         
         behavioral_data = behavior_result['data']
-        img = fmri_result['img']
+        
+        # Handle different data sources
+        if fmri_result['memory_efficient'] and fmri_result['data_source'] == 'memmap':
+            # Memory-mapped data - use special extraction
+            img = None
+            fmri_data = fmri_result['fmri_data']
+        else:
+            # Standard data
+            img = fmri_result['img']
+            fmri_data = None
+        
         confounds = fmri_result['confounds']
         
         for roi_name in mvpa_analysis.maskers.keys():
@@ -1438,15 +1438,16 @@ def main():
             
             # Extract trial-wise data
             try:
-                # Option 1: Standard single timepoint extraction
-                X = mvpa_analysis.extract_trial_data(img, behavioral_data, roi_name, confounds)
-                
-                # Option 2: Advanced pattern extraction (uncomment to use)
-                # pattern_results = mvpa_analysis.extract_trial_patterns(
-                #     img, behavioral_data, roi_name, confounds, 
-                #     pattern_type='average_window', window_size=3
-                # )
-                # X = pattern_results['patterns']
+                if fmri_data is not None:
+                    # Memory-efficient extraction
+                    X = mvpa_analysis.extract_trial_data_memory_efficient(
+                        fmri_data, behavioral_data, roi_name, confounds
+                    )
+                else:
+                    # Standard extraction
+                    X = mvpa_analysis.extract_trial_data(
+                        img, behavioral_data, roi_name, confounds
+                    )
                 
                 # Decode choices
                 choice_result = mvpa_analysis.decode_choices(
@@ -1736,39 +1737,28 @@ def main():
     print("Analysis complete!")
 
 def get_subject_list(config):
-    """
-    Get list of subjects with both behavioral and fMRI data
-    
-    Parameters:
-    -----------
-    config : Config
-        Configuration object
+    """Get list of available subjects"""
+    try:
+        from data_utils import get_complete_subjects
+        subjects = get_complete_subjects(config)
+        return subjects
+    except Exception as e:
+        print(f"Warning: Could not get subject list: {e}")
+        print("Using fallback method...")
         
-    Returns:
-    --------
-    list : Subject IDs
-    """
-    # Get subjects from behavioral data directory
-    behavior_files = list(Path(config.BEHAVIOR_DIR).glob("*_discountFix_events.tsv"))
-    behavioral_subjects = [f.stem.replace('_discountFix_events', '') for f in behavior_files]
-    
-    # Get subjects from fMRI data directory  
-    fmri_subjects = []
-    if os.path.exists(config.FMRIPREP_DIR):
-        for subject_dir in Path(config.FMRIPREP_DIR).iterdir():
-            if subject_dir.is_dir():
-                # Check if ses-2/func directory exists with discountFix data
-                func_dir = subject_dir / "ses-2" / "func"
-                if func_dir.exists():
-                    discount_files = list(func_dir.glob("*task-discountFix*_bold.nii.gz"))
-                    if discount_files:
-                        fmri_subjects.append(subject_dir.name)
-    
-    # Return intersection of subjects with both behavioral and fMRI data
-    common_subjects = list(set(behavioral_subjects) & set(fmri_subjects))
-    print(f"Found {len(common_subjects)} subjects with both behavioral and fMRI data")
-    
-    return sorted(common_subjects)
+        # Fallback: scan directories
+        import os
+        from pathlib import Path
+        
+        subjects = []
+        fmri_dir = Path(config.FMRIPREP_DIR)
+        
+        if fmri_dir.exists():
+            for subject_dir in fmri_dir.iterdir():
+                if subject_dir.is_dir() and subject_dir.name.startswith('sub-'):
+                    subjects.append(subject_dir.name)
+        
+        return sorted(subjects)
 
 if __name__ == "__main__":
     main() 
