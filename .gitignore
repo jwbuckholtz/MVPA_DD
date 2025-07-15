@@ -1,14 +1,46 @@
+
+# Custom project-specific files
 cursor_running_fmri_decoding_and_mvpa_a.md
 delay_geometry_analysis.py
+
+# MacOS metadata files
 .DS_Store
 
-# Python-generated files
+# Python bytecode and cache
 __pycache__/
-*.py[oc]
+*.py[cod]
+*.pyo
+*.pyd
+
+# Python packaging artifacts
 build/
 dist/
 wheels/
-*.egg-info
+*.egg-info/
+*.egg
+.eggs/
 
 # Virtual environments
-.venv
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# VSCode settings
+.vscode/
+
+# PyCharm settings (just in case)
+.idea/
+
+# Ruff & pytest cache
+.cache/
+.pytest_cache/
+ruff_cache/
+
+# Logs and temporary analysis files
+*.log
+*.tmp
+*.bak
