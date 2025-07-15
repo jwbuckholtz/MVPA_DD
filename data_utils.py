@@ -385,6 +385,7 @@ def _compute_subjective_values(events_df: pd.DataFrame, subject_id: str, config:
         events_df['sv_chosen'] = events_df['large_amount'] / 2
         events_df['sv_unchosen'] = events_df['large_amount'] / 2
         events_df['sv_difference'] = np.abs(events_df['sv_chosen'] - events_df['sv_unchosen'])
+        events_df['svchosen_unchosen'] = events_df['sv_chosen'] - events_df['sv_unchosen']
         return events_df
     
     # Fit discount rate
@@ -404,6 +405,7 @@ def _compute_subjective_values(events_df: pd.DataFrame, subject_id: str, config:
         events_df['sv_chosen'] = np.where(choices == 1, sv_large, sv_small)
         events_df['sv_unchosen'] = np.where(choices == 1, sv_small, sv_large)
         events_df['sv_difference'] = np.abs(events_df['sv_chosen'] - events_df['sv_unchosen'])
+        events_df['svchosen_unchosen'] = events_df['sv_chosen'] - events_df['sv_unchosen']
         
     else:
         logger.warning(f"Could not fit discount rate for {subject_id}, using default values")
@@ -411,6 +413,7 @@ def _compute_subjective_values(events_df: pd.DataFrame, subject_id: str, config:
         events_df['sv_chosen'] = events_df['large_amount'] / 2
         events_df['sv_unchosen'] = events_df['large_amount'] / 2
         events_df['sv_difference'] = np.abs(events_df['sv_chosen'] - events_df['sv_unchosen'])
+        events_df['svchosen_unchosen'] = events_df['sv_chosen'] - events_df['sv_unchosen']
     
     return events_df
 

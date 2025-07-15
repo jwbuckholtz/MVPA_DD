@@ -316,7 +316,7 @@ class MVPAAnalysis(BaseAnalysis):
                     
                     # Continuous variable decoding
                     continuous_results = {}
-                    continuous_vars = ['sv_diff', 'sv_sum', 'sv_chosen', 'sv_unchosen']
+                    continuous_vars = ['sv_diff', 'sv_sum', 'sv_chosen', 'sv_unchosen', 'svchosen_unchosen']
                     
                     for var_name in continuous_vars:
                         if var_name in behavioral_data.columns:

@@ -493,7 +493,7 @@ class GeometryAnalysis(BaseAnalysis):
                     
                     # Behavioral correlations
                     behavioral_vars = {}
-                    for var_name in ['sv_diff', 'sv_sum', 'sv_chosen', 'sv_unchosen', 'choice']:
+                    for var_name in ['sv_diff', 'sv_sum', 'sv_chosen', 'sv_unchosen', 'svchosen_unchosen', 'choice']:
                         if var_name in behavioral_data.columns:
                             behavioral_vars[var_name] = behavioral_data[var_name].values
                     

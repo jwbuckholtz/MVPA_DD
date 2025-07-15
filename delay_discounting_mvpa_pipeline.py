@@ -1456,7 +1456,7 @@ def main(enable_memory_efficient=False, memory_config=None):
                 
                 # Decode continuous variables
                 continuous_results = {}
-                for var_name in ['sv_diff', 'sv_sum', 'sv_chosen', 'sv_unchosen', 'later_delay']:
+                for var_name in ['sv_diff', 'sv_sum', 'sv_chosen', 'sv_unchosen', 'svchosen_unchosen', 'later_delay']:
                     cont_result = mvpa_analysis.decode_continuous_variable(
                         X, behavioral_data[var_name].values, roi_name, var_name
                     )
@@ -1497,6 +1497,7 @@ def main(enable_memory_efficient=False, memory_config=None):
                         'sv_sum': behavioral_data['sv_sum'].values,
                         'sv_chosen': behavioral_data['sv_chosen'].values,
                         'sv_unchosen': behavioral_data['sv_unchosen'].values,
+                        'svchosen_unchosen': behavioral_data['svchosen_unchosen'].values,
                         'later_delay': behavioral_data['later_delay'].values,
                         'choice': behavioral_data['choice_binary'].values
                     }

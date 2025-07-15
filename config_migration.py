@@ -182,7 +182,7 @@ class ConfigMigrator:
                 'min_rt': 0.1,
                 'discount_model': 'hyperbolic',
                 'fit_method': 'least_squares',
-                'variables': ['choice', 'choice_binary', 'rt', 'onset', 'delay_days', 'amount_small', 'amount_large', 'sv_chosen', 'sv_unchosen', 'sv_diff', 'sv_sum', 'later_delay', 'discount_rate', 'model_fit']
+                'variables': ['choice', 'choice_binary', 'rt', 'onset', 'delay_days', 'amount_small', 'amount_large', 'sv_chosen', 'sv_unchosen', 'sv_diff', 'sv_sum', 'svchosen_unchosen', 'later_delay', 'discount_rate', 'model_fit']
             },
             'mvpa': {
                 'cv_folds': 5,
@@ -222,7 +222,7 @@ class ConfigMigrator:
                 },
                 'targets': {
                     'classification': ['choice_binary'],
-                    'regression': ['sv_diff', 'sv_sum', 'sv_chosen', 'sv_unchosen', 'later_delay', 'discount_rate']
+                    'regression': ['sv_diff', 'sv_sum', 'sv_chosen', 'sv_unchosen', 'svchosen_unchosen', 'later_delay', 'discount_rate']
                 },
                 'quality_control': {
                     'min_samples_per_class': 5,

@@ -123,6 +123,7 @@ mvpa:
     - sv_sum
     - sv_chosen
     - sv_unchosen
+    - svchosen_unchosen
     - later_delay
     - discount_rate
   quality_control:
