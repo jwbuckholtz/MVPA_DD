@@ -48,7 +48,7 @@ from parallel_mvpa_utils import (
 
 # Import existing pipeline components
 from delay_discounting_mvpa_pipeline import (
-    BehavioralAnalysis, fMRIPreprocessing, MVPAAnalysis,
+    BehavioralAnalysis, fMRIDataLoader, MVPAAnalysis,
     setup_directories, get_subject_list
 )
 from geometry_analysis import GeometryAnalysis

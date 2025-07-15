@@ -141,8 +141,9 @@ def validate_input_data(X: np.ndarray, y: np.ndarray,
     if np.any(np.isnan(y)) or np.any(np.isinf(y)):
         raise MVPAError("y contains NaN or infinite values")
     
-    if X.var() < MVPAConfig.MIN_VARIANCE_THRESHOLD:
-        raise MVPAError("X has very low variance, check data preprocessing")
+    # Data Preparation (standardization, variance thresholding)
+    if np.var(X) < MVPAConfig.MIN_VARIANCE_THRESHOLD:
+        raise MVPAError("X has very low variance, check data preparation")
     
     if task_type == 'classification':
         unique_classes = np.unique(y)
@@ -341,7 +342,7 @@ def run_classification(X: np.ndarray, y: np.ndarray,
         # Validate input data
         validate_input_data(X, y, 'classification')
         
-        # Setup preprocessing pipeline
+        # Setup data preparation pipeline
         steps = []
         if MVPAConfig.STANDARDIZE:
             steps.append(('scaler', StandardScaler()))
@@ -493,7 +494,7 @@ def run_regression(X: np.ndarray, y: np.ndarray,
         # Validate input data
         validate_input_data(X, y, 'regression')
         
-        # Setup preprocessing pipeline
+        # Setup data preparation pipeline
         steps = []
         if MVPAConfig.STANDARDIZE:
             steps.append(('scaler', StandardScaler()))

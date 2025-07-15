@@ -256,7 +256,7 @@ from data_utils import (
 # Find subjects with complete data
 subjects = get_complete_subjects()
 
-# Load data with validation and preprocessing
+# Load data with validation and data preparation
 behavioral_data = load_behavioral_data(subject_id, config, validate=True)
 fmri_img = load_fmri_data(subject_id, config)
 

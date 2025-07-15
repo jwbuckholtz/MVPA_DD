@@ -147,7 +147,7 @@ class MVPAConfig:
     classification: Dict[str, Any] = field(default_factory=dict)
     regression: Dict[str, Any] = field(default_factory=dict)
     feature_selection: Dict[str, Any] = field(default_factory=dict)
-    preprocessing: Dict[str, Any] = field(default_factory=dict)
+    data_preparation: Dict[str, Any] = field(default_factory=dict)
     targets: Dict[str, List[str]] = field(default_factory=dict)
     quality_control: Dict[str, Any] = field(default_factory=dict)
 
@@ -163,7 +163,7 @@ class GeometryConfig:
     random_state: int = 42
     alpha: float = 0.05
     dimensionality_reduction: Dict[str, Any] = field(default_factory=dict)
-    preprocessing: Dict[str, Any] = field(default_factory=dict)
+    data_preparation: Dict[str, Any] = field(default_factory=dict)
     delay_discounting: Dict[str, Any] = field(default_factory=dict)
     comparisons: Dict[str, Any] = field(default_factory=dict)
     advanced_methods: Dict[str, Any] = field(default_factory=dict)
@@ -509,14 +509,14 @@ class Config:
         legacy_config.N_FEATURES = self.mvpa.feature_selection.get('n_features', 1000)
         
         # Preprocessing
-        legacy_config.STANDARDIZE = self.mvpa.preprocessing.get('standardize', True)
+        legacy_config.STANDARDIZE = self.mvpa.data_preparation.get('standardize', True)
         
         # Parallel processing
         legacy_config.N_JOBS = self.parallel.n_jobs
         
         # Quality control
         legacy_config.MIN_SAMPLES_PER_CLASS = self.mvpa.quality_control.get('min_samples_per_class', 5)
-        legacy_config.MIN_VARIANCE_THRESHOLD = self.mvpa.preprocessing.get('variance_threshold', 1e-8)
+        legacy_config.MIN_VARIANCE_THRESHOLD = self.mvpa.data_preparation.get('variance_threshold', 1e-8)
         
         return legacy_config
     

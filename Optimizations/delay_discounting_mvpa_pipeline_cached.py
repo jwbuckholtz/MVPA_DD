@@ -46,7 +46,7 @@ from caching_utils import (
 
 # Import existing pipeline components
 from delay_discounting_mvpa_pipeline import (
-    BehavioralAnalysis, fMRIPreprocessing, MVPAAnalysis,
+    BehavioralAnalysis, fMRIDataLoader, MVPAAnalysis,
     setup_directories, get_subject_list
 )
 from geometry_analysis import GeometryAnalysis
@@ -74,7 +74,7 @@ class CachedMVPAPipeline:
         
         # Initialize analysis classes
         self.behavioral_analysis = BehavioralAnalysis(self.config)
-        self.fmri_preprocessing = fMRIPreprocessing(self.config)
+        self.fmri_loader = fMRIDataLoader(self.config)
         self.mvpa_analysis = MVPAAnalysis(self.config)
         self.geometry_analysis = GeometryAnalysis(self.config)
         

@@ -89,7 +89,7 @@ class ParallelMVPAProcessor:
         # Initialize components (will be passed to parallel workers)
         self.component_configs = {
             'behavioral_analysis': {'config': self.config},
-            'fmri_preprocessing': {'config': self.config},
+            'fmri_data_loading': {'config': self.config},
             'mvpa_analysis': {'config': self.config},
             'geometry_analysis': {'config': self.config}
         }
@@ -322,13 +322,13 @@ def process_single_subject(subject_id: str, config: OAKConfig,
     try:
         # Import here to avoid issues with parallel processing
         from delay_discounting_mvpa_pipeline import (
-            BehavioralAnalysis, fMRIPreprocessing, MVPAAnalysis
+            BehavioralAnalysis, fMRIDataLoader, MVPAAnalysis
         )
         from geometry_analysis import GeometryAnalysis
         
         # Initialize analysis classes
         behavioral_analysis = BehavioralAnalysis(config)
-        fmri_preprocessing = fMRIPreprocessing(config)
+        fmri_loader = fMRIDataLoader(config)
         mvpa_analysis = MVPAAnalysis(config)
         geometry_analysis = GeometryAnalysis(config)
         
@@ -345,7 +345,7 @@ def process_single_subject(subject_id: str, config: OAKConfig,
             }
         
         # Load fMRI data
-        fmri_result = fmri_preprocessing.load_subject_fmri(subject_id)
+        fmri_result = fmri_loader.load_subject_fmri(subject_id)
         if not fmri_result['success']:
             return {
                 'success': False,

@@ -274,8 +274,8 @@ class BehavioralAnalysis:
         except Exception as e:
             return {'worker_id': worker_id, 'success': False, 'error': str(e)}
 
-class fMRIPreprocessing:
-    """Class for fMRI data preprocessing and loading"""
+class fMRIDataLoader:
+    """Class for loading and preparing fMRIPrep-preprocessed fMRI data"""
     
     def __init__(self, config, enable_memory_efficient=False, memory_config=None):
         self.config = config
@@ -289,7 +289,7 @@ class fMRIPreprocessing:
         
     def load_subject_fmri(self, worker_id, force_memory_efficient=False):
         """
-        Load preprocessed fMRI data for a subject
+        Load fMRIPrep-preprocessed fMRI data for a subject
         
         Parameters:
         -----------
@@ -1368,7 +1368,7 @@ def main(enable_memory_efficient=False, memory_config=None):
     
     # Initialize analysis classes
     behavioral_analysis = BehavioralAnalysis(config)
-    fmri_preprocessing = fMRIPreprocessing(config, enable_memory_efficient, memory_config)
+    fmri_loader = fMRIDataLoader(config, enable_memory_efficient, memory_config)
     mvpa_analysis = MVPAAnalysis(config)
     geometry_analysis = GeometryAnalysis(config)
     
@@ -1405,7 +1405,7 @@ def main(enable_memory_efficient=False, memory_config=None):
         
         # 2. Load fMRI data
         print("  - Loading fMRI data...")
-        fmri_result = fmri_preprocessing.load_subject_fmri(worker_id)
+        fmri_result = fmri_loader.load_subject_fmri(worker_id)
         
         if not fmri_result['success']:
             print(f"    Failed: {fmri_result['error']}")

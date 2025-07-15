@@ -111,7 +111,7 @@ mvpa:
     method: univariate
     n_features: 1000
     score_func: f_classif
-  preprocessing:
+  data_preparation:
     standardize: true
     remove_mean: true
     variance_threshold: 1.0e-08
@@ -152,7 +152,7 @@ geometry:
     isomap:
       n_components: 5
       n_neighbors: 10
-  preprocessing:
+  data_preparation:
     standardize_data: true
     remove_mean: true
   delay_discounting:

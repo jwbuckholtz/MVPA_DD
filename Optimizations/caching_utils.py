@@ -403,7 +403,7 @@ class CachedMVPAProcessor:
                              img_hash: str, behavioral_hash: str, 
                              confounds_hash: str, config_hash: str) -> Dict[str, Any]:
         """Implementation of beta extraction with memory-efficient loading"""
-        from delay_discounting_mvpa_pipeline import fMRIPreprocessing, MVPAAnalysis
+        from delay_discounting_mvpa_pipeline import fMRIDataLoader, MVPAAnalysis
         from data_utils import load_behavioral_data
         
         # Load behavioral data

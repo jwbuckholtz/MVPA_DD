@@ -215,7 +215,7 @@ class ConfigMigrator:
                     'n_features': 1000,
                     'score_func': 'f_classif'
                 },
-                'preprocessing': {
+                'data_preparation': {
                     'standardize': True,
                     'remove_mean': True,
                     'variance_threshold': 1e-8
@@ -244,7 +244,7 @@ class ConfigMigrator:
                     'tsne': {'n_components': 3, 'perplexity': 30, 'learning_rate': 200},
                     'isomap': {'n_components': 5, 'n_neighbors': 10}
                 },
-                'preprocessing': {
+                'data_preparation': {
                     'standardize_data': True,
                     'remove_mean': True
                 },
@@ -404,7 +404,7 @@ class ConfigMigrator:
         if 'n_components_mds' in dd_config:
             config['geometry']['dimensionality_reduction']['mds']['n_components'] = dd_config['n_components_mds']
         if 'standardize_data' in dd_config:
-            config['geometry']['preprocessing']['standardize_data'] = dd_config['standardize_data']
+            config['geometry']['data_preparation']['standardize_data'] = dd_config['standardize_data']
         if 'plot_format' in dd_config:
             config['geometry']['plot_format'] = dd_config['plot_format']
         if 'dpi' in dd_config:
@@ -477,13 +477,13 @@ class ConfigMigrator:
             if hasattr(mvpa_config, 'N_FEATURES'):
                 config['mvpa']['feature_selection']['n_features'] = mvpa_config.N_FEATURES
             if hasattr(mvpa_config, 'STANDARDIZE'):
-                config['mvpa']['preprocessing']['standardize'] = mvpa_config.STANDARDIZE
+                config['mvpa']['data_preparation']['standardize'] = mvpa_config.STANDARDIZE
             if hasattr(mvpa_config, 'N_JOBS'):
                 config['parallel']['n_jobs'] = mvpa_config.N_JOBS
             if hasattr(mvpa_config, 'MIN_SAMPLES_PER_CLASS'):
                 config['mvpa']['quality_control']['min_samples_per_class'] = mvpa_config.MIN_SAMPLES_PER_CLASS
             if hasattr(mvpa_config, 'MIN_VARIANCE_THRESHOLD'):
-                config['mvpa']['preprocessing']['variance_threshold'] = mvpa_config.MIN_VARIANCE_THRESHOLD
+                config['mvpa']['data_preparation']['variance_threshold'] = mvpa_config.MIN_VARIANCE_THRESHOLD
             
             self.migration_report['migrated_values']['mvpa_utils'] = {
                 'cv_folds': config['mvpa']['cv_folds'],

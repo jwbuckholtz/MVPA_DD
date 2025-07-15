@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """
-Data Utilities Module for Delay Discounting Analysis Pipeline
+Data Loading and Management Utilities for MVPA Pipeline
+======================================================
 
-This module provides centralized functions for:
-- Loading behavioral data
-- Loading fMRI data (raw, smoothed, preprocessed)
-- Managing confounds
-- Checking file/mask existence
-- Subject discovery and validation
-- Data quality control
+This module provides centralized data loading and validation functionality.
 
-This reduces code duplication across the pipeline and ensures consistent
-data handling throughout all analysis scripts.
+Key distinction:
+- **fMRIPrep preprocessing**: Already completed (skull stripping, normalization, motion correction)
+- **Our data preparation**: Loading + standardization + masking + confound removal
+
+Functions for:
+- Loading fMRIPrep-preprocessed fMRI data (raw, smoothed)
+- Loading behavioral data with validation
+- Loading confounds and applying denoising
+- ROI mask validation and time series extraction
+- Subject discovery and data integrity checking
+- Quality control and data validation
 
 Author: Cognitive Neuroscience Lab, Stanford University
 """
