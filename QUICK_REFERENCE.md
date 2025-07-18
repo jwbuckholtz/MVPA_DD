@@ -9,20 +9,20 @@ Follow these steps to run the entire analysis pipeline on your local machine.
 
 ### 1. Setup Your Environment
 
-First, ensure you have a Python virtual environment set up and the required packages installed.
+First, ensure you have `uv` installed. Then, use it to create and sync your environment.
 
 ```bash
-# Create a virtual environment (do this once)
-python3 -m venv venv
-
-# Activate the virtual environment
-source venv/bin/activate
-
-# Install the required packages
-pip install -r requirements.txt
+# Create and sync the virtual environment (do this once)
+uv venv
+uv sync
 ```
 
-### 2. Configure Your Analysis
+### 2. Activate the Environment
+```bash
+# Activate the virtual environment
+source .venv/bin/activate
+```
+### 3. Configure Your Analysis
 
 All settings for the pipeline are located in the `config.py` file. Before running the analysis, you may want to review and edit this file to:
 
@@ -30,7 +30,7 @@ All settings for the pipeline are located in the `config.py` file. Before runnin
 -   **Adjust Parameters**: Modify analysis parameters in the `Behavioral`, `MVPA`, and `Geometry` classes as needed.
 -   **Select ROIs**: Change the `ROI.CORE_ROIS` list to specify which regions of interest to include in the analysis.
 
-### 3. Run the Pipeline
+### 4. Run the Pipeline
 
 The `main.py` script is the single entry point for running the pipeline.
 
@@ -50,7 +50,7 @@ python main.py --subjects s001 s002 s003
 python main.py --skip-behavioral --skip-geometry
 ```
 
-### 4. View the Results
+### 5. View the Results
 
 The pipeline will create output directories and save the results as CSV files.
 
