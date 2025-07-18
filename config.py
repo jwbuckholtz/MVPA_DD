@@ -27,11 +27,7 @@ class Paths:
 # fMRI parameters
 class FMRI:
     TR = 0.68
-    SMOOTHING_FWHM = 6.0
     HIGH_PASS_FILTER = 0.01
-    STANDARDIZE = True
-    DETREND = True
-    CONFOUND_STRATEGY = 'auto'
 
 # ROI masks
 class ROI:
