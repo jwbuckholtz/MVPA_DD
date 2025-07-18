@@ -3,41 +3,9 @@
 MVPA Analysis Module
 ==================
 
-Refactored MVPA analysis class that inherits from BaseAnalysis.
-Focuses on multi-voxel pattern analysis including decoding and pattern extraction.
-
-Key Features:
-- Neural pattern extraction from ROIs
-- Choice decoding (binary classification)
-- Continuous variable decoding (regression)
-- Cross-validation and permutation testing
-- Multiple classifier/regressor support
-- Memory-efficient processing
-
-Author: Cognitive Neuroscience Lab, Stanford University
+A refactored script for MVPA analysis, including decoding and pattern extraction.
 """
-
-import numpy as np
 import pandas as pd
-import time
-from typing import Dict, List, Optional, Any, Tuple
-import warnings
-
-import nibabel as nib
-from nilearn.input_data import NiftiMasker
-
-# Import base analysis class
-from analysis_base import BaseAnalysis, AnalysisError, AnalysisFactory
-from oak_storage_config import OAKConfig
-from data_utils import DataError
-
-# Import MVPA utilities
-from mvpa_utils import (
-    run_classification, run_regression, extract_neural_patterns,
-    run_dimensionality_reduction, MVPAError, update_mvpa_config
-)
-
-# Import new decoding and data loading modules
 from decoding import classify, regress
 from data_loader import load_behavioral_data, load_fmri_data, extract_roi_data
 import config
@@ -129,29 +97,4 @@ class MVPAAnalysis:
         results_df = pd.DataFrame(flattened_results)
         output_file = config.Paths.MVPA_OUTPUT / 'mvpa_summary.csv'
         results_df.to_csv(output_file, index=False)
-        self.logger.info(f"MVPA results saved to {output_file}")
-
-
-# Register the class with the factory
-AnalysisFactory.register('mvpa', MVPAAnalysis)
-
-
-if __name__ == "__main__":
-    # Example usage
-    from oak_storage_config import OAKConfig
-    
-    # Create MVPA analysis instance
-    config = OAKConfig()
-    mvpa_analysis = MVPAAnalysis()
-    
-    # Run analysis on a few subjects
-    subjects = mvpa_analysis.get_subject_list()[:2]  # Just first 2 subjects
-    mvpa_analysis.run_analysis(subjects)
-    
-    print("Analysis Results:")
-    # The new MVPAAnalysis class does not have a get_analysis_summary method
-    # and the results are not in a structured format like the old one.
-    # This example will print the raw results if they were saved.
-    # For now, we'll just print the subject list and a placeholder message.
-    print(f"Subjects processed: {subjects}")
-    print("MVPA results are saved to mvpa_summary.csv in the output directory.") 
+        self.logger.info(f"MVPA results saved to {output_file}") 
