@@ -3,17 +3,7 @@
 Behavioral Analysis Module
 =========================
 
-Refactored behavioral analysis class that inherits from BaseAnalysis.
-Focuses on hyperbolic discounting model fitting and behavioral data processing.
-
-Key Features:
-- Hyperbolic discounting parameter estimation
-- Choice behavior modeling
-- Subjective value calculation
-- Trial-wise behavioral variable extraction
-- Model validation and quality control
-
-Author: Cognitive Neuroscience Lab, Stanford University
+A refactored script for behavioral analysis of delay discounting data.
 """
 
 import pandas as pd

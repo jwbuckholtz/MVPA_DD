@@ -3,19 +3,7 @@
 Geometry Analysis Module
 =======================
 
-Refactored geometry analysis class that inherits from BaseAnalysis.
-Focuses on neural geometry analysis including dimensionality reduction,
-representational similarity analysis, and manifold comparisons.
-
-Key Features:
-- Representational dissimilarity matrix (RDM) computation
-- Dimensionality reduction (PCA, MDS, t-SNE, Isomap)
-- Behavioral-neural geometry correlations
-- Embedding visualizations
-- Condition-based geometry comparisons
-- Permutation testing for geometric properties
-
-Author: Cognitive Neuroscience Lab, Stanford University
+A refactored script for neural geometry analysis.
 """
 
 import pandas as pd
