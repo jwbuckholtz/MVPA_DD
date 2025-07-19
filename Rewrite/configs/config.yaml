@@ -4,6 +4,7 @@ study:
   version: '1.0'
   pi: Russell Poldrack
   contact: your_email@stanford.edu
+
 paths:
   data_root: /oak/stanford/groups/russpold/data/uh2/aim1
   fmriprep_dir: /oak/stanford/groups/russpold/data/uh2/aim1/derivatives/fmriprep
@@ -14,43 +15,44 @@ paths:
   mvpa_output: mvpa_analysis
   geometry_output: geometry_analysis
   dd_geometry_output: dd_geometry_results
-  masks_dir: /oak/stanford/groups/russpold/data/uh2/aim1/derivatives/masks
   cache_dir: /oak/stanford/groups/russpold/data/uh2/aim1/derivatives/mvpa_analysis/analysis_cache
   log_dir: ./logs
-fmri:
-  tr: 0.68
-  hemi_lag: 0
-  smoothing_fwhm: 6.0
-  high_pass_filter: 0.01
-  standardize: true
-  detrend: true
-  confound_strategy: auto
-  slice_time_ref: 0.5
-  # FIELDS FOR BOLD FILE DISCOVERY  
+  # These three fields are used together to build the file path pattern for locating BOLD fMRI data.
+  # Because session numbers can vary, we use wildcards ("ses*") in the folder path.
+  # The expected data files are located under each subject's directory, in:
+  #   ses*/func/*<task_name>*preproc_bold.nii.gz
+  # For example, with task_name "discountFix", the full glob would be:
+  #   ses*/func/*discountFix*preproc_bold.nii.gz
+  # The full glob pattern is constructed in the paths dataclass.
   task_name: "discountFix"
-  file_glob: "ses*/func/*{task_name}*preproc_bold.nii.gz"
-roi_masks:
-  core_rois:
-  - striatum
-  - dlpfc
-  - vmpfc
-  optional_rois:
-  - left_striatum
-  - right_striatum
-  - left_dlpfc
-  - right_dlpfc
-  - acc
-  - ofc
-  mask_files:
+  bold_func_glob: "ses*/func/"
+  bold_data_suffix: "*preproc_bold.nii.gz"
+  # ROI files information
+  # Assumes all masks are in the same directory and the directory will be prepended to each mask filename in
+  # the paths dataclass
+  masks_dir: /oak/stanford/groups/russpold/data/uh2/aim1/derivatives/masks
+  core_mask_files:
     striatum: striatum_mask.nii.gz
     dlpfc: dlpfc_mask.nii.gz
     vmpfc: vmpfc_mask.nii.gz
+  optional_mask_files:
     left_striatum: left_striatum_mask.nii.gz
     right_striatum: right_striatum_mask.nii.gz
     left_dlpfc: left_dlpfc_mask.nii.gz
     right_dlpfc: right_dlpfc_mask.nii.gz
     acc: acc_mask.nii.gz
     ofc: ofc_mask.nii.gz
+
+fmri:
+  tr: 0.68
+  hemi_lag: 0
+  smoothing_fwhm: 6.0
+  high_pass_filter: 0.01
+  standardize: true
+  detrend: true 
+  confound_strategy: auto
+  slice_time_ref: 0.5
+
 behavioral:
   min_accuracy: 0.6
   max_rt: 10.0
@@ -206,21 +208,6 @@ parallel:
     memory_limit_gb: 64
     cpu_limit: 16
     timeout_minutes: 120
-memory:
-  memory_mapping:
-    enabled: true
-    threshold_gb: 1.0
-    force_memmap: false
-  memory_buffer:
-    available_memory_buffer: 0.2
-    max_memory_per_process_gb: 8.0
-  shared_memory:
-    enabled: true
-    temp_dir: /tmp/mvpa_memmap
-  monitoring:
-    enabled: true
-    log_usage: true
-    warning_threshold: 0.8
 caching:
   enabled: true
   cache_dir: analysis_cache
