@@ -20,6 +20,7 @@ dependencies = [
 
 [tool.ruff]
 extend-include = ["*.ipynb"]
+ignore = ["F401"]
 
 [tool.ruff.format]
 quote-style = "single"
@@ -27,8 +28,3 @@ quote-style = "single"
 [tool.ruff.lint]
 extend-select = ["E501", "W", "N", "R", "I"]
 
-# I want it to ignore F401 because that will delete unused library imports
-# Annoying if Ruff runs on file save (if you haven't had a 
-# chance to use the library yet.
-[tool.ruff]
-ignore = ["F401"]
